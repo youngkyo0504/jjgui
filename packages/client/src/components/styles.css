@@ -133,15 +133,6 @@ body {
   flex: 1;
 }
 
-.commit-change-id {
-  font-weight: 700;
-  color: var(--blue);
-}
-
-.commit-id {
-  color: var(--fg-dim);
-  font-size: 11px;
-}
 
 .commit-timestamp {
   color: var(--fg-dim);
@@ -159,15 +150,6 @@ body {
   white-space: nowrap;
 }
 
-.commit-description--empty {
-  color: var(--fg-dim);
-  font-style: italic;
-}
-
-.commit-author {
-  color: var(--fg-muted);
-  font-size: 11px;
-}
 
 /* Badges */
 .badge {
@@ -197,6 +179,11 @@ body {
 
 .badge--empty {
   background: var(--fg-dim);
+  color: var(--bg);
+}
+
+.badge--editing {
+  background: var(--green);
   color: var(--bg);
 }
 
@@ -255,66 +242,3 @@ body {
   padding: 2px 0;
 }
 
-/* Confirm dialog overlay */
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.dialog {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px 24px;
-  max-width: 400px;
-  width: 90%;
-}
-
-.dialog-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.dialog-message {
-  color: var(--fg-muted);
-  font-size: 12px;
-  margin-bottom: 16px;
-  line-height: 1.6;
-}
-
-.dialog-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.dialog-btn {
-  font-family: inherit;
-  font-size: 12px;
-  padding: 6px 16px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  cursor: pointer;
-  background: transparent;
-  color: var(--fg);
-}
-
-.dialog-btn:hover {
-  background: var(--bg-hover);
-}
-
-.dialog-btn--confirm {
-  background: var(--blue);
-  color: var(--bg);
-  border-color: var(--blue);
-}
-
-.dialog-btn--confirm:hover {
-  opacity: 0.9;
-}

@@ -31,7 +31,7 @@ export interface ChangedFile {
 
 const GRAPH_CHARS = new Set([
   '│', '○', '◆', '@', '~', '├', '╯', '─', '╰', '╮', '╭', '┤', '┬', '┴', '┼',
-  ' ', '|', 'o', '*',
+  ' ', '|', '*',
 ])
 
 const LANE_COLORS = [
@@ -66,10 +66,24 @@ const TEMPLATE = [
 ].join(' ++ ')
 
 function splitGraphAndData(line: string): { graphPrefix: string; data: string } {
+  // commit 라인은 \x1f 구분자를 포함하므로, 첫 \x1f 앞의 changeId 시작 위치를 역추적
+  const sepIdx = line.indexOf('\x1f')
+  if (sepIdx !== -1) {
+    // \x1f 앞에 changeId(알파벳)가 있고, 그 앞이 그래프 영역
+    // changeId는 알파벳 소문자로만 구성되므로 알파벳이 시작되는 지점을 찾음
+    let dataStart = sepIdx
+    while (dataStart > 0 && /[a-z]/.test(line[dataStart - 1])) {
+      dataStart--
+    }
+    return {
+      graphPrefix: line.slice(0, dataStart),
+      data: line.slice(dataStart),
+    }
+  }
+
+  // edge/elided 라인: \x1f가 없으므로 기존 방식으로 그래프 문자 소비
   let i = 0
   while (i < line.length) {
-    const ch = line[i]
-    // Multi-byte unicode chars: check the full character
     const codePoint = line.codePointAt(i)!
     const char = String.fromCodePoint(codePoint)
     const charLen = char.length

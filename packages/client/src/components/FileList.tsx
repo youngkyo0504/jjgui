@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface ChangedFile {
   path: string
@@ -17,8 +17,11 @@ export default function FileList({ changeId, cwd }: Props) {
   useEffect(() => {
     setLoading(true)
     fetch(`/api/show/${changeId}?cwd=${encodeURIComponent(cwd)}`)
-      .then((r) => r.json())
-      .then((data) => setFiles(data))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((data) => setFiles(Array.isArray(data) ? data : []))
       .catch(() => setFiles([]))
       .finally(() => setLoading(false))
   }, [changeId, cwd])
@@ -31,7 +34,7 @@ export default function FileList({ changeId, cwd }: Props) {
       {files.map((f) => (
         <div key={f.path} className="file-list-item">
           <span className={`file-status file-status--${f.status}`}>{f.status}</span>
-          <span className="file-path">{f.path}</span>
+          <span className="file-path">{f.path.split('/').pop()}</span>
         </div>
       ))}
     </div>

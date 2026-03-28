@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import GraphLine from './GraphLine'
 import Badge from './Badge'
 import FileList from './FileList'
+import { formatRelativeTime } from '../utils/format'
 
 interface CommitInfo {
   changeId: string
@@ -24,10 +25,9 @@ interface Props {
   laneColors?: string[]
   commit: CommitInfo
   cwd: string
-  onDoubleClick: (changeId: string) => void
 }
 
-export default function CommitRow({ graphChars, laneColors, commit, cwd, onDoubleClick }: Props) {
+export default function CommitRow({ graphChars, laneColors, commit, cwd }: Props) {
   const [expanded, setExpanded] = useState(false)
 
   const rowClass = [
@@ -42,15 +42,10 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, onDoubl
       <div
         className={rowClass}
         onClick={() => setExpanded(!expanded)}
-        onDoubleClick={(e) => {
-          e.preventDefault()
-          onDoubleClick(commit.changeId)
-        }}
       >
         <GraphLine graphChars={graphChars} laneColors={laneColors} />
         <div className="commit-info">
-          <span className="commit-change-id">{commit.changeId}</span>
-
+          {commit.isWorkingCopy && <Badge label="Editing" variant="editing" />}
           {commit.workspaces.map((ws) => (
             <Badge key={ws} label={ws} variant="workspace" />
           ))}
@@ -60,14 +55,11 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, onDoubl
           {commit.hasConflict && <Badge label="conflict" variant="conflict" />}
           {commit.isEmpty && <Badge label="empty" variant="empty" />}
 
-          <span className="commit-id">{commit.commitId}</span>
-
-          <span className={`commit-description${!commit.description ? ' commit-description--empty' : ''}`}>
-            {commit.description || '(no description)'}
+          <span className="commit-description">
+            {commit.description}
           </span>
 
-          <span className="commit-author">{commit.author}</span>
-          <span className="commit-timestamp">{commit.timestamp}</span>
+          <span className="commit-timestamp">{formatRelativeTime(commit.timestamp)}</span>
         </div>
       </div>
 
