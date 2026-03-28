@@ -1,0 +1,19 @@
+{
+  "name": "visual-jj-webview",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "bin": {
+    "jjgui": "./bin/jjgui.ts"
+  },
+  "scripts": {
+    "dev": "bun run --cwd packages/server dev",
+    "build": "bun run --cwd packages/client build",
+    "start": "bun run bin/jjgui.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
