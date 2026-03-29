@@ -27,19 +27,19 @@
 - 해당 커밋 row 아래에 textarea가 펼쳐지는지 확인
 - 예상: textarea + Save/Cancel 버튼이 인라인으로 표시
 
-### TC-D04: 기존 description이 textarea에 미리 채워짐 (통과x → 수정됨: GET 라우트 method 체크 추가로 description fetch 정상화)
+### TC-D04: 기존 description이 textarea에 미리 채워짐 (통과x → 수정됨: GET 라우트 method 체크 추가로 description fetch 정상화 -> 통과)
 - description이 있는 커밋에서 Describe 실행
 - 예상: textarea에 기존 전체 description이 표시됨
 
-### TC-D05: 빈 description 처리 (통과x → 수정됨: TC-D04 수정으로 재테스트 필요)
+### TC-D05: 빈 description 처리 (통과x → 수정됨: TC-D04 수정으로 재테스트 필요 -> 통과 )
 - `(no description set)` 커밋에서 Describe 실행
 - 예상: textarea가 빈 상태로 표시 (placeholder 텍스트 없음)
 
-### TC-D06: 멀티라인 description 입력 (통과x → 수정됨: TC-D07 수정으로 재테스트 필요)
+### TC-D06: 멀티라인 description 입력 (통과x → 수정됨: TC-D07 수정으로 재테스트 필요 -> 통과)
 - textarea에 여러 줄의 텍스트를 입력하고 Save 클릭
 - 예상: 멀티라인 description이 정상 저장됨
 
-### TC-D07: Save 버튼으로 저장 (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/describe 정상 매칭)
+### TC-D07: Save 버튼으로 저장 (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/describe 정상 매칭 -> 통과)
 - description을 수정하고 Save 클릭
 - 예상: `jj describe` 실행, 그래프 자동 갱신, textarea 닫힘
 
@@ -59,11 +59,11 @@
 - 커밋 우클릭 → "Create bookmark" 클릭
 - 예상: 이름 입력 모달이 표시됨
 
-### TC-B02: 북마크 생성 (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/bookmark/create 정상 매칭)
+### TC-B02: 북마크 생성 (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/bookmark/create 정상 매칭 -> 통과x → 재수정: stderr 캡처 에러 메시지 개선, 재테스트 필요)
 - 모달에 이름 입력 → Create 클릭
 - 예상: 북마크가 생성되고 그래프에 badge 표시
 
-### TC-B03: 빈 이름으로 생성 시도 (통과x → 수정됨: disabled={!name.trim()} 코드 확인 — 이미 구현되어 있으나 재테스트 필요)
+### TC-B03: 빈 이름으로 생성 시도 (통과x → 재수정: disabled 버튼 시각적 스타일 추가 (opacity 0.4, cursor not-allowed), 재테스트 필요)
 - 모달에서 이름을 비워두고 Create 클릭
 - 예상: Create 버튼 비활성화
 
@@ -123,11 +123,11 @@
 - 모달에서 "Select all" 체크박스 토글
 - 예상: 모든 파일 선택/해제
 
-### TC-C04: Split — 최소 1개 파일 남기기 제약 (통과x → 수정됨: canSubmit 로직에 minUnselected=1 이미 적용됨, 재테스트 필요)
+### TC-C04: Split — 최소 1개 파일 남기기 제약 (통과x → 재수정: disabled 버튼 시각적 스타일 추가, 재테스트 필요)
 - 모든 파일을 선택한 상태에서 Confirm 클릭
 - 예상: 최소 1개는 원래 커밋에 남아야 하므로 Confirm 비활성화 (minUnselected=1)
 
-### TC-C05: Split — 실행 및 Undo (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/split 정상 매칭, 재테스트 필요)
+### TC-C05: Split — 실행 및 Undo (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/split 정상 매칭, 재테스트 필요 -> 통과 -> 통과x : confirm을 눌렀으나 아무 변경 없음 )
 - 일부 파일 선택 → Confirm
 - 예상: 커밋이 두 개로 분할, Undo 버튼 표시
 - Undo 클릭
@@ -141,7 +141,7 @@
 - "Squash into parent" 클릭
 - 예상: 소스 커밋과 부모 커밋 정보가 표시된 확인 모달
 
-### TC-C08: Squash — 실행 및 Undo (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/squash 정상 매칭, 재테스트 필요)
+### TC-C08: Squash — 실행 및 Undo (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/squash 정상 매칭, 재테스트 필요. -> 통과)
 - 확인 모달에서 "Squash" 클릭
 - 예상: 부모 커밋으로 합쳐짐, Undo 버튼 표시
 
@@ -153,7 +153,7 @@
 - 파일 선택 후 Confirm → 대상 커밋 클릭
 - 예상: 배너에 소스/대상 정보 표시, 확인 단계
 
-### TC-C11: Move changes — 실행 및 Undo (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/move-changes 정상 매칭, 재테스트 필요)
+### TC-C11: Move changes — 실행 및 Undo (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/move-changes 정상 매칭, 재테스트 필요 -> 통과)
 - "Move" 버튼 클릭
 - 예상: 변경사항 이동 완료, Undo 버튼 표시
 
@@ -165,7 +165,7 @@
 - immutable 커밋 우클릭
 - 예상: Split, Squash, Move changes 모두 비활성화
 
-### TC-C14: Empty 커밋에서 비활성화 (통과x → 수정됨: squash는 empty 커밋에서도 활성화하도록 변경)
+### TC-C14: Empty 커밋에서 비활성화 (통과x → 수정됨: squash는 empty 커밋에서도 활성화하도록 변경 -> 통과)
 - empty 커밋 우클릭
 - 예상: Split, Move changes는 비활성화, Squash는 활성화
 

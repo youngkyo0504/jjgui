@@ -239,7 +239,11 @@ export async function describeCommit(cwd: string, changeId: string, message: str
 
 /** 북마크를 생성한다 */
 export async function bookmarkCreate(cwd: string, name: string, changeId: string): Promise<void> {
-  await $`jj bookmark create ${name} -r ${changeId}`.cwd(cwd)
+  try {
+    await $`jj bookmark create ${name} -r ${changeId}`.cwd(cwd).quiet()
+  } catch (e: any) {
+    throw new Error(e.stderr?.toString()?.trim() || e.message || String(e))
+  }
 }
 
 /** 북마크를 이동한다 */
@@ -262,7 +266,11 @@ export async function bookmarkRename(cwd: string, oldName: string, newName: stri
 /** 커밋을 분할한다 (paths에 해당하는 파일이 첫 번째 커밋에 남음) */
 export async function splitCommit(cwd: string, changeId: string, paths: string[]): Promise<string> {
   const beforeOpId = await getCurrentOperationId(cwd)
-  await $`jj split -r ${changeId} ${paths}`.cwd(cwd)
+  try {
+    await $`jj split -r ${changeId} ${paths}`.cwd(cwd).quiet()
+  } catch (e: any) {
+    throw new Error(e.stderr?.toString()?.trim() || e.message || String(e))
+  }
   return beforeOpId
 }
 

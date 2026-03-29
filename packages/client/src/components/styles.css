@@ -491,6 +491,11 @@ body {
   border-color: var(--fg-dim);
 }
 
+.describe-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .describe-loading {
   color: var(--fg-dim);
   font-size: 12px;
