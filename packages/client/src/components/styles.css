@@ -88,15 +88,36 @@ body {
 .log-view {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+}
+
+/* SVG graph cell */
+.graph-svg-wrap {
+  flex-shrink: 0;
+  user-select: none;
+  align-self: stretch;
+}
+
+.graph-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* Graph row base */
 .graph-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   min-height: 28px;
-  padding: var(--row-padding-y) var(--row-padding-x);
+  padding: 0 var(--row-padding-x);
+}
+
+.graph-row--file-list {
+  align-items: flex-start;
+}
+
+.graph-row--file-list .describe-editor {
+  flex: 1;
+  padding: 8px 0;
 }
 
 .graph-row--commit {
@@ -136,6 +157,16 @@ body {
   flex-wrap: wrap;
   min-width: 0;
   flex: 1;
+  padding: var(--row-padding-y) 0;
+}
+
+.commit-chevron {
+  color: var(--fg-dim);
+  font-size: 10px;
+  width: 12px;
+  flex-shrink: 0;
+  user-select: none;
+  cursor: pointer;
 }
 
 .commit-change-id {

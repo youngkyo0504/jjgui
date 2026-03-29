@@ -1,5 +1,5 @@
 import React from 'react'
-import GraphLine from './GraphLine'
+import SvgGraphCell from './SvgGraphCell'
 
 interface Props {
   graphChars: string
@@ -9,7 +9,7 @@ interface Props {
 export default function EdgeRow({ graphChars, laneColors }: Props) {
   return (
     <div className="graph-row">
-      <GraphLine graphChars={graphChars} laneColors={laneColors} />
+      <SvgGraphCell graphChars={graphChars} laneColors={laneColors} />
     </div>
   )
 }

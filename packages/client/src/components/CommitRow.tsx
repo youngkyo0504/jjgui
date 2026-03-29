@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import GraphLine from './GraphLine'
+import SvgGraphCell from './SvgGraphCell'
 import Badge from './Badge'
 import FileList from './FileList'
 import ContextMenu from './ContextMenu'
@@ -141,7 +141,7 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
   return (
     <div>
       <div className={rowClass} onClick={handleClick} onContextMenu={handleContextMenu}>
-        <GraphLine graphChars={graphChars} laneColors={laneColors} />
+        <SvgGraphCell graphChars={graphChars} laneColors={laneColors} />
         <div className="commit-info">
           {commit.isWorkingCopy && <Badge label="Editing" variant="editing" />}
           {commit.workspaces.map((ws) => (
@@ -155,6 +155,9 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
           {commit.hasConflict && <Badge label="conflict" variant="conflict" />}
           {commit.isEmpty && <Badge label="empty" variant="empty" />}
 
+          {!isAnyMoveMode && (
+            <span className="commit-chevron">{expanded ? '▾' : '▸'}</span>
+          )}
           <span className="commit-description">
             {commit.description}
           </span>
@@ -165,35 +168,39 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
       </div>
 
       {expanded && !isRebaseMode && !isDescribing && (
-        <div className="graph-row" style={{ paddingLeft: graphChars.length + 'ch' }}>
+        <div className="graph-row graph-row--file-list">
+          <SvgGraphCell graphChars={graphChars} laneColors={laneColors} lineOnly />
           <FileList changeId={commit.changeId} cwd={cwd} />
         </div>
       )}
 
       {isDescribing && (
-        <div className="describe-editor" style={{ paddingLeft: graphChars.length + 'ch' }}>
-          {describeLoading ? (
-            <div className="describe-loading">Loading...</div>
-          ) : (
-            <>
-              <textarea
-                ref={textareaRef}
-                className="describe-textarea"
-                value={describeText}
-                onChange={(e) => setDescribeText(e.target.value)}
-                rows={4}
-                placeholder="Enter commit description..."
-              />
-              <div className="describe-actions">
-                <button className="describe-btn describe-btn--save" onClick={() => onDescribeSave(commit.changeId, describeText)}>
-                  Save
-                </button>
-                <button className="describe-btn describe-btn--cancel" onClick={onDescribeCancel}>
-                  Cancel
-                </button>
-              </div>
-            </>
-          )}
+        <div className="graph-row graph-row--file-list">
+          <SvgGraphCell graphChars={graphChars} laneColors={laneColors} lineOnly />
+          <div className="describe-editor">
+            {describeLoading ? (
+              <div className="describe-loading">Loading...</div>
+            ) : (
+              <>
+                <textarea
+                  ref={textareaRef}
+                  className="describe-textarea"
+                  value={describeText}
+                  onChange={(e) => setDescribeText(e.target.value)}
+                  rows={4}
+                  placeholder="Enter commit description..."
+                />
+                <div className="describe-actions">
+                  <button className="describe-btn describe-btn--save" onClick={() => onDescribeSave(commit.changeId, describeText)}>
+                    Save
+                  </button>
+                  <button className="describe-btn describe-btn--cancel" onClick={onDescribeCancel}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 

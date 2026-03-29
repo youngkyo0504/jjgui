@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 import { resolve } from 'path'
 import { readFileSync, unlinkSync, openSync } from 'fs'
+import { loadConfig, resolveOpener } from '../packages/server/src/config'
+import { open } from '../packages/server/src/opener'
 
 const PORT = 7777
 const PID_FILE = '/tmp/jjgui.pid'
@@ -52,14 +54,28 @@ if (process.argv[2] === 'stop') {
   process.exit(0)
 }
 
+// --- --opener 플래그 파싱 ---
+let openerFlag: string | undefined
+let pathArg = '.'
+
+for (const arg of process.argv.slice(2)) {
+  if (arg.startsWith('--opener=')) {
+    openerFlag = arg.split('=')[1]
+  } else if (!arg.startsWith('--')) {
+    pathArg = arg
+  }
+}
+
+const config = loadConfig()
+const opener = resolveOpener(openerFlag, config)
+
 // --- start/connect 모드 ---
-const arg = process.argv[2] ?? '.'
-const cwd = resolve(arg)
+const cwd = resolve(pathArg)
 const url = `http://localhost:${PORT}/?cwd=${encodeURIComponent(cwd)}`
 
 if (await isServerRunning()) {
   console.log('jjgui 서버가 이미 실행 중입니다. 브라우저를 엽니다.')
-  Bun.spawn(['open', url])
+  await open(url, opener, config)
   process.exit(0)
 }
 
@@ -80,7 +96,7 @@ child.unref()
 console.log(`watching: ${cwd}`)
 
 if (await waitForServer()) {
-  Bun.spawn(['open', url])
+  await open(url, opener, config)
 } else {
   console.error('서버 시작 실패. 로그를 확인하세요: /tmp/jjgui.log')
 }
