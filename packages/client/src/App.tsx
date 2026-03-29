@@ -126,8 +126,10 @@ export default function App() {
         body: JSON.stringify({ changeId }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || `HTTP ${res.status}`)
+        const text = await res.text()
+        let message = `HTTP ${res.status}`
+        try { message = JSON.parse(text).error || message } catch { message = text || message }
+        throw new Error(message)
       }
       await fetchLog()
     } catch (e) {
@@ -144,8 +146,10 @@ export default function App() {
         body: JSON.stringify({ changeId }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || `HTTP ${res.status}`)
+        const text = await res.text()
+        let message = `HTTP ${res.status}`
+        try { message = JSON.parse(text).error || message } catch { message = text || message }
+        throw new Error(message)
       }
       await fetchLog()
     } catch (e) {
