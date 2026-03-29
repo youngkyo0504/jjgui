@@ -23,7 +23,7 @@ export async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url)
 
   // GET /api/log?cwd=...
-  if (url.pathname === '/api/log') {
+  if (req.method === 'GET' && url.pathname === '/api/log') {
     const cwd = getCwd(url)
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     try {
@@ -34,7 +34,7 @@ export async function handleRequest(req: Request): Promise<Response> {
   }
 
   // GET /api/show/:changeId?cwd=...
-  if (url.pathname.startsWith('/api/show/')) {
+  if (req.method === 'GET' && url.pathname.startsWith('/api/show/')) {
     const cwd = getCwd(url)
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     const changeId = url.pathname.slice('/api/show/'.length)
@@ -98,7 +98,7 @@ export async function handleRequest(req: Request): Promise<Response> {
   }
 
   // GET /api/description/:changeId?cwd=...
-  if (url.pathname.startsWith('/api/description/')) {
+  if (req.method === 'GET' && url.pathname.startsWith('/api/description/')) {
     const cwd = getCwd(url)
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     const changeId = url.pathname.slice('/api/description/'.length)
@@ -215,7 +215,7 @@ export async function handleRequest(req: Request): Promise<Response> {
   }
 
   // GET /api/remotes?cwd=...
-  if (url.pathname === '/api/remotes') {
+  if (req.method === 'GET' && url.pathname === '/api/remotes') {
     const cwd = getCwd(url)
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     try {

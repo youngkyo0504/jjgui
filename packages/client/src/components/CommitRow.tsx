@@ -223,7 +223,7 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
             },
             {
               label: 'Squash into parent',
-              disabled: commit.isImmutable || commit.isEmpty,
+              disabled: commit.isImmutable,
               onClick: () => onSquashStart(commit.changeId, commit.description, commit.parents[0] ?? ''),
             },
             {
