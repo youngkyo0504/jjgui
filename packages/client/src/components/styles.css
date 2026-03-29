@@ -681,3 +681,13 @@ body {
   opacity: 1;
 }
 
+/* Badge pushing state */
+.badge-pushing {
+  animation: badge-pulse 1s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+

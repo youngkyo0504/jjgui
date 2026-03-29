@@ -148,8 +148,8 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
             <Badge key={ws} label={ws} variant="workspace" />
           ))}
           {commit.bookmarks.map((bm) => (
-            <span key={bm} onContextMenu={(e) => handleBookmarkContextMenu(e, bm)}>
-              <Badge label={bm} variant="bookmark" />
+            <span key={bm} onContextMenu={(e) => handleBookmarkContextMenu(e, bm)} className={pushingBookmarks.has(bm) ? 'badge-pushing' : ''}>
+              <Badge label={pushingBookmarks.has(bm) ? `${bm} (pushing...)` : bm} variant="bookmark" />
             </span>
           ))}
           {commit.hasConflict && <Badge label="conflict" variant="conflict" />}
