@@ -4,7 +4,7 @@ import Badge from './Badge'
 import FileList from './FileList'
 import ContextMenu from './ContextMenu'
 import { formatRelativeTime } from '../utils/format'
-import type { RebaseState, BookmarkMoveState, MoveChangesState } from '../App'
+import type { RebaseState, MoveChangesState } from '../App'
 
 interface CommitInfo {
   changeId: string
@@ -28,22 +28,19 @@ interface Props {
   commit: CommitInfo
   cwd: string
   rebase: RebaseState
-  bookmarkMove: BookmarkMoveState
   moveChanges: MoveChangesState
   describingChangeId: string | null
   onRebaseStart: (changeId: string, description: string) => void
   onDestinationSelect: (changeId: string, description: string) => void
-  onBookmarkMoveDestinationSelect: (changeId: string, description: string) => void
   onMoveChangesDestinationSelect: (changeId: string, description: string) => void
   onEdit: (changeId: string) => void
   onNew: (changeId: string) => void
   onDescribeStart: (changeId: string) => void
   onDescribeCancel: () => void
   onDescribeSave: (changeId: string, message: string) => void
-  onBookmarkCreate: (changeId: string) => void
+  onSetBookmark: (changeId: string) => void
   onBookmarkDelete: (name: string) => void
   onBookmarkRename: (name: string) => void
-  onBookmarkMoveStart: (bookmarkName: string, sourceChangeId: string) => void
   onSplitStart: (changeId: string) => void
   onSquashStart: (changeId: string, description: string, parentDescription: string) => void
   onMoveChangesStart: (changeId: string) => void
@@ -51,7 +48,7 @@ interface Props {
   pushingBookmarks: Set<string>
 }
 
-export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, bookmarkMove, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onBookmarkMoveDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onBookmarkCreate, onBookmarkDelete, onBookmarkRename, onBookmarkMoveStart, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, pushingBookmarks }: Props) {
+export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, pushingBookmarks }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [bookmarkContextMenu, setBookmarkContextMenu] = useState<{ x: number; y: number; name: string } | null>(null)
@@ -83,21 +80,15 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
   const isDescendant = rebase.descendants?.has(commit.changeId) ?? false
   const isInSubtree = isSource || isDescendant
   const isRebaseMode = rebase.phase === 'source-selected' || rebase.phase === 'confirming'
-  const isBookmarkMoveMode = bookmarkMove.phase === 'selecting-destination' || bookmarkMove.phase === 'confirming'
   const isMoveChangesMode = moveChanges.phase === 'selecting-destination' || moveChanges.phase === 'confirming'
-  const isAnyMoveMode = isRebaseMode || isBookmarkMoveMode || isMoveChangesMode
+  const isAnyMoveMode = isRebaseMode || isMoveChangesMode
   const isDisabledTarget = isRebaseMode && isInSubtree
   const isDestination = rebase.destinationChangeId === commit.changeId
-  const isBookmarkMoveDestination = bookmarkMove.destinationChangeId === commit.changeId
   const isMoveChangesDestination = moveChanges.toChangeId === commit.changeId
 
   const handleClick = () => {
     if (rebase.phase === 'source-selected' && !isInSubtree) {
       onDestinationSelect(commit.changeId, commit.description)
-      return
-    }
-    if (bookmarkMove.phase === 'selecting-destination') {
-      onBookmarkMoveDestinationSelect(commit.changeId, commit.description)
       return
     }
     if (moveChanges.phase === 'selecting-destination') {
@@ -131,10 +122,8 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
     isDescendant && 'graph-row--rebase-descendant',
     isDisabledTarget && 'graph-row--rebase-disabled',
     isDestination && 'graph-row--rebase-destination',
-    isBookmarkMoveDestination && 'graph-row--rebase-destination',
     isMoveChangesDestination && 'graph-row--rebase-destination',
     isRebaseMode && !isInSubtree && 'graph-row--rebase-target',
-    isBookmarkMoveMode && 'graph-row--rebase-target',
     isMoveChangesMode && 'graph-row--rebase-target',
   ].filter(Boolean).join(' ')
 
@@ -239,8 +228,9 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
               onClick: () => onMoveChangesStart(commit.changeId),
             },
             {
-              label: 'Create bookmark',
-              onClick: () => onBookmarkCreate(commit.changeId),
+              label: 'Set bookmark',
+              disabled: commit.isImmutable,
+              onClick: () => onSetBookmark(commit.changeId),
             },
             {
               label: 'Rebase this subtree',
@@ -261,10 +251,6 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
               label: pushingBookmarks.has(bookmarkContextMenu.name) ? 'Pushing...' : 'Push this bookmark',
               disabled: pushingBookmarks.has(bookmarkContextMenu.name),
               onClick: () => onPushBookmark(bookmarkContextMenu.name),
-            },
-            {
-              label: 'Move bookmark',
-              onClick: () => onBookmarkMoveStart(bookmarkContextMenu.name, commit.changeId),
             },
             {
               label: 'Rename bookmark',

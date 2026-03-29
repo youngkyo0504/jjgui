@@ -297,6 +297,25 @@ export async function getRemotes(cwd: string): Promise<string[]> {
   return result.split('\n').filter(Boolean).map((line) => line.split(/\s+/)[0])
 }
 
+/** 로컬 bookmark 목록을 가져온다 */
+export async function bookmarkList(cwd: string): Promise<string[]> {
+  const result = await $`jj bookmark list --template 'name ++ "\n"'`.cwd(cwd).text()
+  return result.split('\n').filter(Boolean)
+}
+
+/** bookmark을 설정한다 (존재하면 move, 없으면 create) */
+export async function bookmarkSet(cwd: string, name: string, changeId: string, allowBackwards = false): Promise<void> {
+  try {
+    if (allowBackwards) {
+      await $`jj bookmark set ${name} -r ${changeId} --allow-backwards`.cwd(cwd).quiet()
+    } else {
+      await $`jj bookmark set ${name} -r ${changeId}`.cwd(cwd).quiet()
+    }
+  } catch (e: any) {
+    throw new Error(e.stderr?.toString()?.trim() || e.message || String(e))
+  }
+}
+
 /** bookmark을 git remote에 push한다 */
 export async function pushBookmark(cwd: string, bookmark: string, remote: string, force: boolean = false): Promise<string> {
   const proc = force

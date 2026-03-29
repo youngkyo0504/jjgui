@@ -1,4 +1,4 @@
-import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit, bookmarkCreate, bookmarkMove, bookmarkDelete, bookmarkRename, splitCommit, squashCommit, moveChanges, getRemotes, pushBookmark } from './jj'
+import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit, bookmarkCreate, bookmarkMove, bookmarkDelete, bookmarkRename, bookmarkList, bookmarkSet, splitCommit, squashCommit, moveChanges, getRemotes, pushBookmark } from './jj'
 
 // cwd별 SSE 클라이언트 관리
 const sseClients = new Map<string, Set<ReadableStreamDefaultController>>()
@@ -120,6 +120,31 @@ export async function handleRequest(req: Request): Promise<Response> {
       return Response.json({ ok: true })
     } catch (e) {
       return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // GET /api/bookmarks?cwd=...
+  if (req.method === 'GET' && url.pathname === '/api/bookmarks') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const bookmarks = await bookmarkList(cwd)
+      return Response.json({ bookmarks })
+    } catch (e) {
+      return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/bookmark/set?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/bookmark/set') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      await bookmarkSet(cwd, body.name, body.changeId, body.allowBackwards ?? false)
+      return Response.json({ ok: true })
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e) }, { status: 500 })
     }
   }
 
