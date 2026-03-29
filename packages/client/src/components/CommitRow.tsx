@@ -4,7 +4,7 @@ import Badge from './Badge'
 import FileList from './FileList'
 import ContextMenu from './ContextMenu'
 import { formatRelativeTime } from '../utils/format'
-import type { RebaseState } from '../App'
+import type { RebaseState, BookmarkMoveState } from '../App'
 
 interface CommitInfo {
   changeId: string
@@ -28,19 +28,26 @@ interface Props {
   commit: CommitInfo
   cwd: string
   rebase: RebaseState
+  bookmarkMove: BookmarkMoveState
   describingChangeId: string | null
   onRebaseStart: (changeId: string, description: string) => void
   onDestinationSelect: (changeId: string, description: string) => void
+  onBookmarkMoveDestinationSelect: (changeId: string, description: string) => void
   onEdit: (changeId: string) => void
   onNew: (changeId: string) => void
   onDescribeStart: (changeId: string) => void
   onDescribeCancel: () => void
   onDescribeSave: (changeId: string, message: string) => void
+  onBookmarkCreate: (changeId: string) => void
+  onBookmarkDelete: (name: string) => void
+  onBookmarkRename: (name: string) => void
+  onBookmarkMoveStart: (bookmarkName: string, sourceChangeId: string) => void
 }
 
-export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, describingChangeId, onRebaseStart, onDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave }: Props) {
+export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, bookmarkMove, describingChangeId, onRebaseStart, onDestinationSelect, onBookmarkMoveDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onBookmarkCreate, onBookmarkDelete, onBookmarkRename, onBookmarkMoveStart }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [bookmarkContextMenu, setBookmarkContextMenu] = useState<{ x: number; y: number; name: string } | null>(null)
   const [describeText, setDescribeText] = useState('')
   const [describeLoading, setDescribeLoading] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -69,23 +76,37 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
   const isDescendant = rebase.descendants?.has(commit.changeId) ?? false
   const isInSubtree = isSource || isDescendant
   const isRebaseMode = rebase.phase === 'source-selected' || rebase.phase === 'confirming'
+  const isBookmarkMoveMode = bookmarkMove.phase === 'selecting-destination' || bookmarkMove.phase === 'confirming'
+  const isAnyMoveMode = isRebaseMode || isBookmarkMoveMode
   const isDisabledTarget = isRebaseMode && isInSubtree
   const isDestination = rebase.destinationChangeId === commit.changeId
+  const isBookmarkMoveDestination = bookmarkMove.destinationChangeId === commit.changeId
 
   const handleClick = () => {
     if (rebase.phase === 'source-selected' && !isInSubtree) {
       onDestinationSelect(commit.changeId, commit.description)
       return
     }
-    if (!isRebaseMode) {
+    if (bookmarkMove.phase === 'selecting-destination') {
+      onBookmarkMoveDestinationSelect(commit.changeId, commit.description)
+      return
+    }
+    if (!isAnyMoveMode) {
       setExpanded(!expanded)
     }
   }
 
   const handleContextMenu = (e: React.MouseEvent) => {
-    if (isRebaseMode) return
+    if (isAnyMoveMode) return
     e.preventDefault()
     setContextMenu({ x: e.clientX, y: e.clientY })
+  }
+
+  const handleBookmarkContextMenu = (e: React.MouseEvent, name: string) => {
+    if (isAnyMoveMode) return
+    e.preventDefault()
+    e.stopPropagation()
+    setBookmarkContextMenu({ x: e.clientX, y: e.clientY, name })
   }
 
   const rowClass = [
@@ -97,7 +118,9 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
     isDescendant && 'graph-row--rebase-descendant',
     isDisabledTarget && 'graph-row--rebase-disabled',
     isDestination && 'graph-row--rebase-destination',
+    isBookmarkMoveDestination && 'graph-row--rebase-destination',
     isRebaseMode && !isInSubtree && 'graph-row--rebase-target',
+    isBookmarkMoveMode && 'graph-row--rebase-target',
   ].filter(Boolean).join(' ')
 
   return (
@@ -110,7 +133,9 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
             <Badge key={ws} label={ws} variant="workspace" />
           ))}
           {commit.bookmarks.map((bm) => (
-            <Badge key={bm} label={bm} variant="bookmark" />
+            <span key={bm} onContextMenu={(e) => handleBookmarkContextMenu(e, bm)}>
+              <Badge label={bm} variant="bookmark" />
+            </span>
           ))}
           {commit.hasConflict && <Badge label="conflict" variant="conflict" />}
           {commit.isEmpty && <Badge label="empty" variant="empty" />}
@@ -177,12 +202,38 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
               onClick: () => onDescribeStart(commit.changeId),
             },
             {
+              label: 'Create bookmark',
+              onClick: () => onBookmarkCreate(commit.changeId),
+            },
+            {
               label: 'Rebase this subtree',
               disabled: commit.isImmutable,
               onClick: () => onRebaseStart(commit.changeId, commit.description),
             },
           ]}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {bookmarkContextMenu && (
+        <ContextMenu
+          x={bookmarkContextMenu.x}
+          y={bookmarkContextMenu.y}
+          items={[
+            {
+              label: 'Move bookmark',
+              onClick: () => onBookmarkMoveStart(bookmarkContextMenu.name, commit.changeId),
+            },
+            {
+              label: 'Rename bookmark',
+              onClick: () => onBookmarkRename(bookmarkContextMenu.name),
+            },
+            {
+              label: 'Delete bookmark',
+              onClick: () => onBookmarkDelete(bookmarkContextMenu.name),
+            },
+          ]}
+          onClose={() => setBookmarkContextMenu(null)}
         />
       )}
     </div>

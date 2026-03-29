@@ -1,4 +1,4 @@
-import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit } from './jj'
+import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit, bookmarkCreate, bookmarkMove, bookmarkDelete, bookmarkRename } from './jj'
 
 // cwd별 SSE 클라이언트 관리
 const sseClients = new Map<string, Set<ReadableStreamDefaultController>>()
@@ -120,6 +120,58 @@ export async function handleRequest(req: Request): Promise<Response> {
       return Response.json({ ok: true })
     } catch (e) {
       return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/bookmark/create?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/bookmark/create') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      await bookmarkCreate(cwd, body.name, body.changeId)
+      return Response.json({ ok: true })
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/bookmark/move?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/bookmark/move') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      const beforeOpId = await bookmarkMove(cwd, body.name, body.destinationChangeId)
+      return Response.json({ ok: true, beforeOpId })
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/bookmark/delete?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/bookmark/delete') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      await bookmarkDelete(cwd, body.name)
+      return Response.json({ ok: true })
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/bookmark/rename?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/bookmark/rename') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      await bookmarkRename(cwd, body.oldName, body.newName)
+      return Response.json({ ok: true })
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e) }, { status: 500 })
     }
   }
 

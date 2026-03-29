@@ -236,3 +236,25 @@ export async function getFullDescription(cwd: string, changeId: string): Promise
 export async function describeCommit(cwd: string, changeId: string, message: string): Promise<void> {
   await $`jj describe ${changeId} -m ${message}`.cwd(cwd)
 }
+
+/** 북마크를 생성한다 */
+export async function bookmarkCreate(cwd: string, name: string, changeId: string): Promise<void> {
+  await $`jj bookmark create ${name} -r ${changeId}`.cwd(cwd)
+}
+
+/** 북마크를 이동한다 */
+export async function bookmarkMove(cwd: string, name: string, destinationChangeId: string): Promise<string> {
+  const beforeOpId = await getCurrentOperationId(cwd)
+  await $`jj bookmark move ${name} --to ${destinationChangeId}`.cwd(cwd)
+  return beforeOpId
+}
+
+/** 북마크를 삭제한다 */
+export async function bookmarkDelete(cwd: string, name: string): Promise<void> {
+  await $`jj bookmark delete ${name}`.cwd(cwd)
+}
+
+/** 북마크 이름을 변경한다 */
+export async function bookmarkRename(cwd: string, oldName: string, newName: string): Promise<void> {
+  await $`jj bookmark rename ${oldName} ${newName}`.cwd(cwd)
+}
