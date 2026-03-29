@@ -266,8 +266,11 @@ export async function bookmarkRename(cwd: string, oldName: string, newName: stri
 /** 커밋을 분할한다 (paths에 해당하는 파일이 첫 번째 커밋에 남음) */
 export async function splitCommit(cwd: string, changeId: string, paths: string[]): Promise<string> {
   const beforeOpId = await getCurrentOperationId(cwd)
+  // 기존 description을 가져와서 -m으로 전달하여 에디터가 열리지 않도록 함
+  const description = await $`jj log --no-graph -r ${changeId} -T 'description'`.cwd(cwd).text()
+  const desc = description.replace(/\n$/, '') || '(split)'
   try {
-    await $`jj split -r ${changeId} ${paths}`.cwd(cwd).quiet()
+    await $`jj split -r ${changeId} -m ${desc} ${paths}`.cwd(cwd).quiet()
   } catch (e: any) {
     throw new Error(e.stderr?.toString()?.trim() || e.message || String(e))
   }
@@ -296,9 +299,11 @@ export async function getRemotes(cwd: string): Promise<string[]> {
 
 /** bookmark을 git remote에 push한다 */
 export async function pushBookmark(cwd: string, bookmark: string, remote: string, force: boolean = false): Promise<string> {
-  const args = force
-    ? $`jj git push -b ${bookmark} --remote ${remote} --allow-new`.cwd(cwd)
-    : $`jj git push -b ${bookmark} --remote ${remote}`.cwd(cwd)
-  const result = await args.text()
-  return result
+  const proc = force
+    ? $`jj git push -b ${bookmark} --remote ${remote} --allow-new`.cwd(cwd).quiet()
+    : $`jj git push -b ${bookmark} --remote ${remote}`.cwd(cwd).quiet()
+  const result = await proc
+  const stdout = result.stdout.toString()
+  const stderr = result.stderr.toString()
+  return stdout + stderr
 }

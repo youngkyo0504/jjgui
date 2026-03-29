@@ -123,11 +123,11 @@
 - 모달에서 "Select all" 체크박스 토글
 - 예상: 모든 파일 선택/해제
 
-### TC-C04: Split — 최소 1개 파일 남기기 제약 (통과x → 재수정: disabled 버튼 시각적 스타일 추가, 재테스트 필요)
+### TC-C04: Split — 최소 1개 파일 남기기 제약 (통과x → 재수정: disabled 버튼 시각적 스타일 추가, 재테스트 필요 -> 통과)
 - 모든 파일을 선택한 상태에서 Confirm 클릭
 - 예상: 최소 1개는 원래 커밋에 남아야 하므로 Confirm 비활성화 (minUnselected=1)
 
-### TC-C05: Split — 실행 및 Undo (통과x → 수정됨: GET 라우트 method 체크 추가로 POST /api/split 정상 매칭, 재테스트 필요 -> 통과 -> 통과x : confirm을 눌렀으나 아무 변경 없음 )
+### TC-C05: Split — 실행 및 Undo (통과x → 재수정: jj split에 -m 옵션 추가하여 에디터 열림 방지, 재테스트 필요)
 - 일부 파일 선택 → Confirm
 - 예상: 커밋이 두 개로 분할, Undo 버튼 표시
 - Undo 클릭
@@ -179,42 +179,42 @@
 
 ## 4. Git Push 기능 (전체 통과x: bookmark 기능 고쳐지면 다시 테스트할 예정)
 
-### TC-P01: Push this bookmark 메뉴 항목 
+### TC-P01: Push this bookmark 메뉴 항목(통과)
 - 북마크 badge 우클릭
 - 예상: "Push this bookmark" 항목 표시
 
-### TC-P02: Remote 1개일 때 바로 push
+### TC-P02: Remote 1개일 때 바로 push (통과)
 - remote가 1개인 저장소에서 "Push this bookmark" 클릭
 - 예상: 바로 push 실행, 성공 토스트 표시
 
-### TC-P03: Remote 여러 개일 때 선택 UI
+### TC-P03: Remote 여러 개일 때 선택 UI (통과)
 - remote가 여러 개인 저장소에서 "Push this bookmark" 클릭
 - 예상: remote 선택 드롭다운 모달 표시
 - remote 선택 후 push 실행
 
-### TC-P04: Push 성공 피드백
+### TC-P04: Push 성공 피드백 (통과x → 재수정: 토스트 위치를 오른쪽 위로 변경, 재테스트 필요)
 - push 성공 시
 - 예상: 녹색 토스트 "bookmark pushed to remote" 표시
 
-### TC-P05: Already up to date 피드백
+### TC-P05: Already up to date 피드백 (통과x → 재수정: pushBookmark에서 stderr도 캡처하여 "Nothing changed" 감지, 재테스트 필요)
 - 이미 동기화된 bookmark push 시
 - 예상: 파란색 토스트 "already up to date" 표시
 
-### TC-P06: Push 실패 피드백
+### TC-P06: Push 실패 피드백 (통과)
 - push 실패 시 (인증 오류 등)
 - 예상: 빨간색 에러 토스트 표시
 
-### TC-P07: Non-fast-forward 시 Force push 확인
+### TC-P07: Non-fast-forward 시 Force push 확인 (통과)
 - non-fast-forward 상황에서 push 시도
 - 예상: "Force push?" 확인 다이얼로그 표시
 - "Force Push" 클릭
 - 예상: force push 실행
 
-### TC-P08: 토스트 클릭으로 닫기
+### TC-P08: 토스트 클릭으로 닫기 (통과x → 재수정: 토스트에 x 닫기 버튼 추가, 재테스트 필요)
 - push 결과 토스트 클릭
 - 예상: 토스트 사라짐
 
-### TC-P09: Push 중 Pushing... 표시
+### TC-P09: Push 중 Pushing... 표시 (통과x → 확인: 코드상 pushingBookmarks 상태 전달 정상, push가 빠르게 완료되어 표시 안 보일 수 있음)
 - push 진행 중 같은 bookmark badge 우클릭
 - 예상: "Pushing..." 항목이 비활성화 상태로 표시
 

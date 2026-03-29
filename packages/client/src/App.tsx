@@ -341,12 +341,12 @@ export default function App() {
     }
   }, [cwd])
 
-  const handleSplitConfirm = useCallback(async (changeId: string, selectedPaths: string[]) => {
+  const handleSplitConfirm = useCallback(async (changeId: string, selectedPaths: string[], allFiles: { path: string; status: string }[]) => {
     setFileSelectModal(null)
     try {
       // GUI: 사용자가 "새 커밋으로 빼낼 파일"을 선택 → 선택하지 않은 파일을 jj split paths로 전달
-      const allFiles = await fetch(`/api/show/${changeId}?cwd=${encodeURIComponent(cwd)}`).then((r) => r.json())
-      const remainPaths = allFiles.filter((f: { path: string }) => !selectedPaths.includes(f.path)).map((f: { path: string }) => f.path)
+      const remainPaths = allFiles.filter((f) => !selectedPaths.includes(f.path)).map((f) => f.path)
+      if (remainPaths.length === 0) { setEditError('At least one file must remain in the original commit'); return }
       const res = await fetch(`/api/split?cwd=${encodeURIComponent(cwd)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -628,7 +628,7 @@ export default function App() {
           minUnselected={fileSelectModal.type === 'split' ? 1 : 0}
           onSubmit={(paths) => {
             if (fileSelectModal.type === 'split') {
-              handleSplitConfirm(fileSelectModal.changeId, paths)
+              handleSplitConfirm(fileSelectModal.changeId, paths, fileSelectModal.files)
             } else {
               handleMoveChangesFileSelect(fileSelectModal.changeId, paths)
             }
@@ -672,8 +672,9 @@ export default function App() {
         />
       )}
       {pushResult && (
-        <div className={`push-toast push-toast--${pushResult.type}`} onClick={() => setPushResult(null)}>
-          {pushResult.message}
+        <div className={`push-toast push-toast--${pushResult.type}`}>
+          <span className="push-toast-message">{pushResult.message}</span>
+          <button className="push-toast-close" onClick={() => setPushResult(null)}>&times;</button>
         </div>
       )}
     </div>
