@@ -547,3 +547,52 @@ body {
   justify-content: flex-end;
 }
 
+.modal--wide {
+  min-width: 480px;
+  max-width: 600px;
+}
+
+.modal-message {
+  color: var(--fg-muted);
+  font-size: 12px;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.file-select-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 4px;
+}
+
+.file-select-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.file-select-item:hover {
+  background: var(--bg-hover);
+}
+
+.file-select-item--all {
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.file-select-label {
+  color: var(--fg);
+}
+
+.file-select-path {
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+

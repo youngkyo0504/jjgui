@@ -1,4 +1,4 @@
-import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit, bookmarkCreate, bookmarkMove, bookmarkDelete, bookmarkRename } from './jj'
+import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit, bookmarkCreate, bookmarkMove, bookmarkDelete, bookmarkRename, splitCommit, squashCommit, moveChanges } from './jj'
 
 // cwd별 SSE 클라이언트 관리
 const sseClients = new Map<string, Set<ReadableStreamDefaultController>>()
@@ -170,6 +170,45 @@ export async function handleRequest(req: Request): Promise<Response> {
       const body = await req.json()
       await bookmarkRename(cwd, body.oldName, body.newName)
       return Response.json({ ok: true })
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/split?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/split') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      const beforeOpId = await splitCommit(cwd, body.changeId, body.paths)
+      return Response.json({ ok: true, beforeOpId })
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/squash?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/squash') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      const beforeOpId = await squashCommit(cwd, body.changeId)
+      return Response.json({ ok: true, beforeOpId })
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/move-changes?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/move-changes') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      const beforeOpId = await moveChanges(cwd, body.fromChangeId, body.toChangeId, body.paths)
+      return Response.json({ ok: true, beforeOpId })
     } catch (e) {
       return Response.json({ ok: false, error: String(e) }, { status: 500 })
     }

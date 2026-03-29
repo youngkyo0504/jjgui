@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import LogView from './components/LogView'
 import RebaseBanner from './components/RebaseBanner'
 import BookmarkMoveBanner from './components/BookmarkMoveBanner'
+import MoveChangesBanner from './components/MoveChangesBanner'
 import BookmarkModal from './components/BookmarkModal'
+import FileSelectModal from './components/FileSelectModal'
+import ConfirmModal from './components/ConfirmModal'
 import ErrorBanner from './components/ErrorBanner'
 import { buildChildrenMap, getDescendants } from './utils/graph'
 import './components/styles.css'
@@ -56,14 +59,29 @@ export interface BookmarkMoveState {
   beforeOpId?: string
 }
 
+export type MoveChangesPhase = 'idle' | 'selecting-destination' | 'confirming' | 'executing'
+
+export interface MoveChangesState {
+  phase: MoveChangesPhase
+  fromChangeId?: string
+  selectedPaths?: string[]
+  toChangeId?: string
+  toDescription?: string
+  lastAction?: 'move-changes' | 'split' | 'squash'
+  beforeOpId?: string
+}
+
 export default function App() {
   const [rows, setRows] = useState<GraphRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [rebase, setRebase] = useState<RebaseState>({ phase: 'idle' })
   const [bookmarkMove, setBookmarkMove] = useState<BookmarkMoveState>({ phase: 'idle' })
+  const [moveChanges, setMoveChanges] = useState<MoveChangesState>({ phase: 'idle' })
   const [describingChangeId, setDescribingChangeId] = useState<string | null>(null)
   const [bookmarkModal, setBookmarkModal] = useState<{ mode: 'create' | 'rename'; changeId?: string; bookmarkName?: string } | null>(null)
+  const [fileSelectModal, setFileSelectModal] = useState<{ type: 'split' | 'move-changes'; changeId: string; files: { path: string; status: string }[] } | null>(null)
+  const [squashConfirm, setSquashConfirm] = useState<{ changeId: string; description: string; parentDescription: string } | null>(null)
 
   const cwd = new URLSearchParams(window.location.search).get('cwd') ?? ''
 
@@ -307,6 +325,132 @@ export default function App() {
     }
   }, [cwd, bookmarkMove.beforeOpId])
 
+  // Split/Squash/MoveChanges handlers
+  const handleSplitStart = useCallback(async (changeId: string) => {
+    try {
+      const res = await fetch(`/api/show/${changeId}?cwd=${encodeURIComponent(cwd)}`)
+      const files = await res.json()
+      if (files.length === 0) { setEditError('No files to split'); return }
+      setFileSelectModal({ type: 'split', changeId, files })
+    } catch (e) {
+      setEditError(String(e))
+    }
+  }, [cwd])
+
+  const handleSplitConfirm = useCallback(async (changeId: string, selectedPaths: string[]) => {
+    setFileSelectModal(null)
+    try {
+      // GUI: 사용자가 "새 커밋으로 빼낼 파일"을 선택 → 선택하지 않은 파일을 jj split paths로 전달
+      const allFiles = await fetch(`/api/show/${changeId}?cwd=${encodeURIComponent(cwd)}`).then((r) => r.json())
+      const remainPaths = allFiles.filter((f: { path: string }) => !selectedPaths.includes(f.path)).map((f: { path: string }) => f.path)
+      const res = await fetch(`/api/split?cwd=${encodeURIComponent(cwd)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changeId, paths: remainPaths }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      setMoveChanges({ phase: 'idle', lastAction: 'split', beforeOpId: data.beforeOpId })
+      await fetchLog()
+    } catch (e) {
+      setEditError(String(e))
+    }
+  }, [cwd])
+
+  const handleSquashStart = useCallback((changeId: string, description: string, parentDescription: string) => {
+    setSquashConfirm({ changeId, description, parentDescription })
+  }, [])
+
+  const handleSquashConfirm = useCallback(async () => {
+    if (!squashConfirm) return
+    setSquashConfirm(null)
+    try {
+      const res = await fetch(`/api/squash?cwd=${encodeURIComponent(cwd)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changeId: squashConfirm.changeId }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      setMoveChanges({ phase: 'idle', lastAction: 'squash', beforeOpId: data.beforeOpId })
+      await fetchLog()
+    } catch (e) {
+      setEditError(String(e))
+    }
+  }, [cwd, squashConfirm])
+
+  const handleMoveChangesStart = useCallback(async (changeId: string) => {
+    try {
+      const res = await fetch(`/api/show/${changeId}?cwd=${encodeURIComponent(cwd)}`)
+      const files = await res.json()
+      if (files.length === 0) { setEditError('No files to move'); return }
+      setFileSelectModal({ type: 'move-changes', changeId, files })
+    } catch (e) {
+      setEditError(String(e))
+    }
+  }, [cwd])
+
+  const handleMoveChangesFileSelect = useCallback((changeId: string, selectedPaths: string[]) => {
+    setFileSelectModal(null)
+    if (rebase.phase !== 'idle' || bookmarkMove.phase !== 'idle') return
+    setMoveChanges({
+      phase: 'selecting-destination',
+      fromChangeId: changeId,
+      selectedPaths,
+    })
+  }, [rebase.phase, bookmarkMove.phase])
+
+  const handleMoveChangesDestinationSelect = useCallback((changeId: string, description: string) => {
+    setMoveChanges((prev) => ({
+      ...prev,
+      phase: 'confirming',
+      toChangeId: changeId,
+      toDescription: description,
+    }))
+  }, [])
+
+  const handleMoveChangesCancel = useCallback(() => {
+    setMoveChanges({ phase: 'idle' })
+  }, [])
+
+  const handleMoveChangesConfirm = useCallback(async () => {
+    if (!moveChanges.fromChangeId || !moveChanges.toChangeId || !moveChanges.selectedPaths) return
+    setMoveChanges((prev) => ({ ...prev, phase: 'executing' }))
+    try {
+      const res = await fetch(`/api/move-changes?cwd=${encodeURIComponent(cwd)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromChangeId: moveChanges.fromChangeId, toChangeId: moveChanges.toChangeId, paths: moveChanges.selectedPaths }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      setMoveChanges({ phase: 'idle', lastAction: 'move-changes', beforeOpId: data.beforeOpId })
+      await fetchLog()
+    } catch (e) {
+      setEditError(String(e))
+      setMoveChanges({ phase: 'idle' })
+    }
+  }, [moveChanges.fromChangeId, moveChanges.toChangeId, moveChanges.selectedPaths, cwd])
+
+  const handleMoveChangesUndo = useCallback(async () => {
+    if (!moveChanges.beforeOpId) return
+    try {
+      const res = await fetch(`/api/undo?cwd=${encodeURIComponent(cwd)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operationId: moveChanges.beforeOpId }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      setMoveChanges({ phase: 'idle' })
+      await fetchLog()
+    } catch (e) {
+      setError(String(e))
+    }
+  }, [cwd, moveChanges.beforeOpId])
+
   const handleUndo = useCallback(async () => {
     if (!rebase.beforeOpId) return
     try {
@@ -326,7 +470,7 @@ export default function App() {
     }
   }, [cwd, rebase.beforeOpId])
 
-  // ESC 키로 rebase/bookmark move 모드 취소
+  // ESC 키로 rebase/bookmark move/move changes 모드 취소
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -336,11 +480,14 @@ export default function App() {
         if (bookmarkMove.phase !== 'idle' && bookmarkMove.phase !== 'executing') {
           handleBookmarkMoveCancel()
         }
+        if (moveChanges.phase !== 'idle' && moveChanges.phase !== 'executing') {
+          handleMoveChangesCancel()
+        }
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [rebase.phase, handleRebaseCancel, bookmarkMove.phase, handleBookmarkMoveCancel])
+  }, [rebase.phase, handleRebaseCancel, bookmarkMove.phase, handleBookmarkMoveCancel, moveChanges.phase, handleMoveChangesCancel])
 
   useEffect(() => {
     fetchLog()
@@ -372,15 +519,23 @@ export default function App() {
         onConfirm={handleBookmarkMoveConfirm}
         onUndo={handleBookmarkMoveUndo}
       />
+      <MoveChangesBanner
+        moveChanges={moveChanges}
+        onCancel={handleMoveChangesCancel}
+        onConfirm={handleMoveChangesConfirm}
+        onUndo={handleMoveChangesUndo}
+      />
       <LogView
         rows={rows}
         cwd={cwd}
         rebase={rebase}
         bookmarkMove={bookmarkMove}
+        moveChanges={moveChanges}
         describingChangeId={describingChangeId}
         onRebaseStart={handleRebaseStart}
         onDestinationSelect={handleDestinationSelect}
         onBookmarkMoveDestinationSelect={handleBookmarkMoveDestinationSelect}
+        onMoveChangesDestinationSelect={handleMoveChangesDestinationSelect}
         onEdit={handleEdit}
         onNew={handleNew}
         onDescribeStart={handleDescribeStart}
@@ -390,6 +545,9 @@ export default function App() {
         onBookmarkDelete={handleBookmarkDelete}
         onBookmarkRename={(name) => setBookmarkModal({ mode: 'rename', bookmarkName: name })}
         onBookmarkMoveStart={handleBookmarkMoveStart}
+        onSplitStart={handleSplitStart}
+        onSquashStart={handleSquashStart}
+        onMoveChangesStart={handleMoveChangesStart}
       />
       {bookmarkModal && (
         <BookmarkModal
@@ -403,6 +561,30 @@ export default function App() {
             }
           }}
           onCancel={() => setBookmarkModal(null)}
+        />
+      )}
+      {fileSelectModal && (
+        <FileSelectModal
+          title={fileSelectModal.type === 'split' ? 'Split: 새 커밋으로 빼낼 파일 선택' : 'Move changes: 이동할 파일 선택'}
+          files={fileSelectModal.files}
+          minUnselected={fileSelectModal.type === 'split' ? 1 : 0}
+          onSubmit={(paths) => {
+            if (fileSelectModal.type === 'split') {
+              handleSplitConfirm(fileSelectModal.changeId, paths)
+            } else {
+              handleMoveChangesFileSelect(fileSelectModal.changeId, paths)
+            }
+          }}
+          onCancel={() => setFileSelectModal(null)}
+        />
+      )}
+      {squashConfirm && (
+        <ConfirmModal
+          title="Squash into parent"
+          message={`"${squashConfirm.description || '(no description)'}" → parent "${squashConfirm.parentDescription || '(no description)'}"`}
+          confirmLabel="Squash"
+          onConfirm={handleSquashConfirm}
+          onCancel={() => setSquashConfirm(null)}
         />
       )}
     </div>

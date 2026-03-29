@@ -258,3 +258,24 @@ export async function bookmarkDelete(cwd: string, name: string): Promise<void> {
 export async function bookmarkRename(cwd: string, oldName: string, newName: string): Promise<void> {
   await $`jj bookmark rename ${oldName} ${newName}`.cwd(cwd)
 }
+
+/** 커밋을 분할한다 (paths에 해당하는 파일이 첫 번째 커밋에 남음) */
+export async function splitCommit(cwd: string, changeId: string, paths: string[]): Promise<string> {
+  const beforeOpId = await getCurrentOperationId(cwd)
+  await $`jj split -r ${changeId} ${paths}`.cwd(cwd)
+  return beforeOpId
+}
+
+/** 커밋을 부모로 합친다 */
+export async function squashCommit(cwd: string, changeId: string): Promise<string> {
+  const beforeOpId = await getCurrentOperationId(cwd)
+  await $`jj squash -r ${changeId}`.cwd(cwd)
+  return beforeOpId
+}
+
+/** 변경사항을 다른 커밋으로 이동한다 */
+export async function moveChanges(cwd: string, fromChangeId: string, toChangeId: string, paths: string[]): Promise<string> {
+  const beforeOpId = await getCurrentOperationId(cwd)
+  await $`jj squash --from ${fromChangeId} --into ${toChangeId} ${paths}`.cwd(cwd)
+  return beforeOpId
+}

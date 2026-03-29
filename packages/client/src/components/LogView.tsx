@@ -1,7 +1,7 @@
 import CommitRow from './CommitRow'
 import EdgeRow from './EdgeRow'
 import ElidedRow from './ElidedRow'
-import type { RebaseState, BookmarkMoveState } from '../App'
+import type { RebaseState, BookmarkMoveState, MoveChangesState } from '../App'
 
 interface CommitInfo {
   changeId: string
@@ -32,10 +32,12 @@ interface Props {
   cwd: string
   rebase: RebaseState
   bookmarkMove: BookmarkMoveState
+  moveChanges: MoveChangesState
   describingChangeId: string | null
   onRebaseStart: (changeId: string, description: string) => void
   onDestinationSelect: (changeId: string, description: string) => void
   onBookmarkMoveDestinationSelect: (changeId: string, description: string) => void
+  onMoveChangesDestinationSelect: (changeId: string, description: string) => void
   onEdit: (changeId: string) => void
   onNew: (changeId: string) => void
   onDescribeStart: (changeId: string) => void
@@ -45,9 +47,12 @@ interface Props {
   onBookmarkDelete: (name: string) => void
   onBookmarkRename: (name: string) => void
   onBookmarkMoveStart: (bookmarkName: string, sourceChangeId: string) => void
+  onSplitStart: (changeId: string) => void
+  onSquashStart: (changeId: string, description: string, parentDescription: string) => void
+  onMoveChangesStart: (changeId: string) => void
 }
 
-export default function LogView({ rows, cwd, rebase, bookmarkMove, describingChangeId, onRebaseStart, onDestinationSelect, onBookmarkMoveDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onBookmarkCreate, onBookmarkDelete, onBookmarkRename, onBookmarkMoveStart }: Props) {
+export default function LogView({ rows, cwd, rebase, bookmarkMove, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onBookmarkMoveDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onBookmarkCreate, onBookmarkDelete, onBookmarkRename, onBookmarkMoveStart, onSplitStart, onSquashStart, onMoveChangesStart }: Props) {
   return (
     <div className="log-view">
       {rows.map((row, i) => {
@@ -61,10 +66,12 @@ export default function LogView({ rows, cwd, rebase, bookmarkMove, describingCha
               cwd={cwd}
               rebase={rebase}
               bookmarkMove={bookmarkMove}
+              moveChanges={moveChanges}
               describingChangeId={describingChangeId}
               onRebaseStart={onRebaseStart}
               onDestinationSelect={onDestinationSelect}
               onBookmarkMoveDestinationSelect={onBookmarkMoveDestinationSelect}
+              onMoveChangesDestinationSelect={onMoveChangesDestinationSelect}
               onEdit={onEdit}
               onNew={onNew}
               onDescribeStart={onDescribeStart}
@@ -74,6 +81,9 @@ export default function LogView({ rows, cwd, rebase, bookmarkMove, describingCha
               onBookmarkDelete={onBookmarkDelete}
               onBookmarkRename={onBookmarkRename}
               onBookmarkMoveStart={onBookmarkMoveStart}
+              onSplitStart={onSplitStart}
+              onSquashStart={onSquashStart}
+              onMoveChangesStart={onMoveChangesStart}
             />
           )
         }
