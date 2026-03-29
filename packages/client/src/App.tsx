@@ -82,6 +82,10 @@ export default function App() {
   const [bookmarkModal, setBookmarkModal] = useState<{ mode: 'create' | 'rename'; changeId?: string; bookmarkName?: string } | null>(null)
   const [fileSelectModal, setFileSelectModal] = useState<{ type: 'split' | 'move-changes'; changeId: string; files: { path: string; status: string }[] } | null>(null)
   const [squashConfirm, setSquashConfirm] = useState<{ changeId: string; description: string; parentDescription: string } | null>(null)
+  const [pushingBookmarks, setPushingBookmarks] = useState<Set<string>>(new Set())
+  const [pushResult, setPushResult] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
+  const [remoteSelect, setRemoteSelect] = useState<{ bookmark: string; remotes: string[] } | null>(null)
+  const [forcePushConfirm, setForcePushConfirm] = useState<{ bookmark: string; remote: string; error: string } | null>(null)
 
   const cwd = new URLSearchParams(window.location.search).get('cwd') ?? ''
 
@@ -451,6 +455,58 @@ export default function App() {
     }
   }, [cwd, moveChanges.beforeOpId])
 
+  // Push handlers
+  const doPush = useCallback(async (bookmark: string, remote: string, force: boolean = false) => {
+    setPushingBookmarks((prev) => new Set(prev).add(bookmark))
+    setPushResult(null)
+    setForcePushConfirm(null)
+    try {
+      const res = await fetch(`/api/push?cwd=${encodeURIComponent(cwd)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookmark, remote, force }),
+      })
+      const data = await res.json()
+      if (!data.ok) {
+        const errStr = data.error || ''
+        if (errStr.includes('non-fast-forward') || errStr.includes('rejected')) {
+          setForcePushConfirm({ bookmark, remote, error: errStr })
+        } else {
+          setPushResult({ type: 'error', message: errStr })
+        }
+        return
+      }
+      const output = data.output || ''
+      if (output.includes('Nothing changed') || output.includes('already up to date')) {
+        setPushResult({ type: 'info', message: `${bookmark}: already up to date` })
+      } else {
+        setPushResult({ type: 'success', message: `${bookmark} pushed to ${remote}` })
+      }
+      await fetchLog()
+    } catch (e) {
+      setPushResult({ type: 'error', message: String(e) })
+    } finally {
+      setPushingBookmarks((prev) => { const next = new Set(prev); next.delete(bookmark); return next })
+    }
+  }, [cwd])
+
+  const handlePushBookmark = useCallback(async (bookmark: string) => {
+    try {
+      const res = await fetch(`/api/remotes?cwd=${encodeURIComponent(cwd)}`)
+      const data = await res.json()
+      const remotes: string[] = data.remotes || []
+      if (remotes.length === 0) {
+        setPushResult({ type: 'error', message: 'No remotes configured' })
+      } else if (remotes.length === 1) {
+        doPush(bookmark, remotes[0])
+      } else {
+        setRemoteSelect({ bookmark, remotes })
+      }
+    } catch (e) {
+      setPushResult({ type: 'error', message: String(e) })
+    }
+  }, [cwd, doPush])
+
   const handleUndo = useCallback(async () => {
     if (!rebase.beforeOpId) return
     try {
@@ -548,6 +604,8 @@ export default function App() {
         onSplitStart={handleSplitStart}
         onSquashStart={handleSquashStart}
         onMoveChangesStart={handleMoveChangesStart}
+        onPushBookmark={handlePushBookmark}
+        pushingBookmarks={pushingBookmarks}
       />
       {bookmarkModal && (
         <BookmarkModal
@@ -586,6 +644,37 @@ export default function App() {
           onConfirm={handleSquashConfirm}
           onCancel={() => setSquashConfirm(null)}
         />
+      )}
+      {remoteSelect && (
+        <div className="modal-overlay" onClick={() => setRemoteSelect(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">Select remote for {remoteSelect.bookmark}</div>
+            <div className="remote-list">
+              {remoteSelect.remotes.map((r) => (
+                <button key={r} className="remote-item" onClick={() => { doPush(remoteSelect.bookmark, r); setRemoteSelect(null) }}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="describe-btn describe-btn--cancel" onClick={() => setRemoteSelect(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {forcePushConfirm && (
+        <ConfirmModal
+          title="Force push?"
+          message={`Push failed: ${forcePushConfirm.error}\n\nForce push ${forcePushConfirm.bookmark} to ${forcePushConfirm.remote}?`}
+          confirmLabel="Force Push"
+          onConfirm={() => { doPush(forcePushConfirm.bookmark, forcePushConfirm.remote, true); setForcePushConfirm(null) }}
+          onCancel={() => setForcePushConfirm(null)}
+        />
+      )}
+      {pushResult && (
+        <div className={`push-toast push-toast--${pushResult.type}`} onClick={() => setPushResult(null)}>
+          {pushResult.message}
+        </div>
       )}
     </div>
   )

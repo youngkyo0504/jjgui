@@ -47,9 +47,11 @@ interface Props {
   onSplitStart: (changeId: string) => void
   onSquashStart: (changeId: string, description: string, parentDescription: string) => void
   onMoveChangesStart: (changeId: string) => void
+  onPushBookmark: (bookmark: string) => void
+  pushingBookmarks: Set<string>
 }
 
-export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, bookmarkMove, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onBookmarkMoveDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onBookmarkCreate, onBookmarkDelete, onBookmarkRename, onBookmarkMoveStart, onSplitStart, onSquashStart, onMoveChangesStart }: Props) {
+export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, bookmarkMove, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onBookmarkMoveDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onBookmarkCreate, onBookmarkDelete, onBookmarkRename, onBookmarkMoveStart, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, pushingBookmarks }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [bookmarkContextMenu, setBookmarkContextMenu] = useState<{ x: number; y: number; name: string } | null>(null)
@@ -248,6 +250,11 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
           x={bookmarkContextMenu.x}
           y={bookmarkContextMenu.y}
           items={[
+            {
+              label: pushingBookmarks.has(bookmarkContextMenu.name) ? 'Pushing...' : 'Push this bookmark',
+              disabled: pushingBookmarks.has(bookmarkContextMenu.name),
+              onClick: () => onPushBookmark(bookmarkContextMenu.name),
+            },
             {
               label: 'Move bookmark',
               onClick: () => onBookmarkMoveStart(bookmarkContextMenu.name, commit.changeId),

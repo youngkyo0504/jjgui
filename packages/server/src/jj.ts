@@ -279,3 +279,18 @@ export async function moveChanges(cwd: string, fromChangeId: string, toChangeId:
   await $`jj squash --from ${fromChangeId} --into ${toChangeId} ${paths}`.cwd(cwd)
   return beforeOpId
 }
+
+/** git remote 목록을 가져온다 */
+export async function getRemotes(cwd: string): Promise<string[]> {
+  const result = await $`jj git remote list`.cwd(cwd).text()
+  return result.split('\n').filter(Boolean).map((line) => line.split(/\s+/)[0])
+}
+
+/** bookmark을 git remote에 push한다 */
+export async function pushBookmark(cwd: string, bookmark: string, remote: string, force: boolean = false): Promise<string> {
+  const args = force
+    ? $`jj git push -b ${bookmark} --remote ${remote} --allow-new`.cwd(cwd)
+    : $`jj git push -b ${bookmark} --remote ${remote}`.cwd(cwd)
+  const result = await args.text()
+  return result
+}
