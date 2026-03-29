@@ -195,3 +195,33 @@ export async function getChangedFiles(cwd: string, changeId: string): Promise<Ch
 export async function editCommit(cwd: string, changeId: string): Promise<void> {
   await $`jj edit ${changeId}`.cwd(cwd)
 }
+
+export async function newCommit(cwd: string, changeId: string): Promise<void> {
+  await $`jj new ${changeId}`.cwd(cwd)
+}
+
+export type RebaseMode = 'source' | 'revision' | 'branch'
+
+/** 현재 최신 operation id를 가져온다 */
+async function getCurrentOperationId(cwd: string): Promise<string> {
+  const result = await $`jj op log --no-graph -T 'self.id().short() ++ "\n"' --limit 1`.cwd(cwd).text()
+  return result.trim()
+}
+
+/** rebase 실행 후 이전 operation id를 반환한다 (undo용) */
+export async function rebaseCommit(
+  cwd: string,
+  sourceChangeId: string,
+  destinationChangeId: string,
+  mode: RebaseMode = 'source',
+): Promise<string> {
+  const beforeOpId = await getCurrentOperationId(cwd)
+  const flag = mode === 'source' ? '-s' : mode === 'revision' ? '-r' : '-b'
+  await $`jj rebase ${flag} ${sourceChangeId} -d ${destinationChangeId}`.cwd(cwd)
+  return beforeOpId
+}
+
+/** 특정 operation 상태로 복원한다 */
+export async function restoreOperation(cwd: string, operationId: string): Promise<void> {
+  await $`jj op restore ${operationId}`.cwd(cwd)
+}

@@ -1,4 +1,4 @@
-import { getGraphLog, getChangedFiles, editCommit } from './jj'
+import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation } from './jj'
 
 // cwd별 SSE 클라이언트 관리
 const sseClients = new Map<string, Set<ReadableStreamDefaultController>>()
@@ -52,6 +52,45 @@ export async function handleRequest(req: Request): Promise<Response> {
     try {
       const body = await req.json()
       await editCommit(cwd, body.changeId)
+      return Response.json({ ok: true })
+    } catch (e) {
+      return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/new?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/new') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      await newCommit(cwd, body.changeId)
+      return Response.json({ ok: true })
+    } catch (e) {
+      return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/rebase?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/rebase') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      const beforeOpId = await rebaseCommit(cwd, body.sourceChangeId, body.destinationChangeId, body.mode ?? 'source')
+      return Response.json({ ok: true, beforeOpId })
+    } catch (e) {
+      return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/undo?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/undo') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      await restoreOperation(cwd, body.operationId)
       return Response.json({ ok: true })
     } catch (e) {
       return Response.json({ error: String(e) }, { status: 500 })

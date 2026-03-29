@@ -242,3 +242,171 @@ body {
   padding: 2px 0;
 }
 
+/* Rebase mode */
+.graph-row--rebase-source {
+  background: rgba(122, 162, 247, 0.15);
+  border-left: 2px solid var(--blue);
+}
+
+.graph-row--rebase-descendant {
+  background: rgba(122, 162, 247, 0.08);
+  border-left: 2px solid rgba(122, 162, 247, 0.4);
+}
+
+.graph-row--rebase-disabled {
+  opacity: 0.4;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.graph-row--rebase-target {
+  cursor: pointer;
+}
+
+.graph-row--rebase-target:hover {
+  background: rgba(158, 206, 106, 0.15);
+  border-left: 2px solid var(--green);
+}
+
+.graph-row--rebase-destination {
+  background: rgba(158, 206, 106, 0.2);
+  border-left: 2px solid var(--green);
+}
+
+/* Rebase banner */
+.rebase-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--blue);
+  font-size: 12px;
+}
+
+.rebase-banner--confirm {
+  border-color: var(--orange);
+}
+
+.rebase-banner--success {
+  border-color: var(--green);
+}
+
+.rebase-banner-text {
+  flex: 1;
+  color: var(--fg);
+}
+
+.rebase-banner-text strong {
+  color: var(--blue);
+  font-family: inherit;
+}
+
+.rebase-banner-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rebase-banner-btn--confirm {
+  background: var(--blue);
+  color: var(--bg);
+  border-color: var(--blue);
+}
+
+.rebase-banner-btn--undo {
+  background: var(--orange);
+  color: var(--bg);
+  border-color: var(--orange);
+}
+
+.rebase-banner-btn--cancel:hover {
+  border-color: var(--fg-dim);
+}
+
+.rebase-banner-btn--confirm:hover {
+  opacity: 0.9;
+}
+
+.rebase-banner-btn--undo:hover {
+  opacity: 0.9;
+}
+
+/* Context menu */
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 160px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  color: var(--fg);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.context-menu-item--disabled {
+  color: var(--fg-dim);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.context-menu-item--disabled:hover {
+  background: none;
+}
+
+/* Error banner */
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--red);
+  font-size: 12px;
+}
+
+.error-banner-text {
+  flex: 1;
+  color: var(--red);
+}
+
+.error-banner-close {
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.error-banner-close:hover {
+  color: var(--fg);
+}
+
