@@ -93,6 +93,7 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
           </span>
 
           <span className="commit-timestamp">{formatRelativeTime(commit.timestamp)}</span>
+          <span className="commit-change-id">{commit.changeId.slice(0, 3)}</span>
         </div>
       </div>
 
