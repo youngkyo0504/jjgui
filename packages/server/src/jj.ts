@@ -225,3 +225,14 @@ export async function rebaseCommit(
 export async function restoreOperation(cwd: string, operationId: string): Promise<void> {
   await $`jj op restore ${operationId}`.cwd(cwd)
 }
+
+/** 커밋의 전체 description을 가져온다 */
+export async function getFullDescription(cwd: string, changeId: string): Promise<string> {
+  const result = await $`jj log --no-graph -r ${changeId} -T 'description'`.cwd(cwd).text()
+  return result.replace(/\n$/, '')
+}
+
+/** 커밋의 description을 변경한다 */
+export async function describeCommit(cwd: string, changeId: string, message: string): Promise<void> {
+  await $`jj describe ${changeId} -m ${message}`.cwd(cwd)
+}

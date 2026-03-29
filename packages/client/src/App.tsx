@@ -47,6 +47,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [rebase, setRebase] = useState<RebaseState>({ phase: 'idle' })
+  const [describingChangeId, setDescribingChangeId] = useState<string | null>(null)
 
   const cwd = new URLSearchParams(window.location.search).get('cwd') ?? ''
 
@@ -157,6 +158,31 @@ export default function App() {
     }
   }, [cwd])
 
+  const handleDescribeStart = useCallback((changeId: string) => {
+    setDescribingChangeId(changeId)
+  }, [])
+
+  const handleDescribeCancel = useCallback(() => {
+    setDescribingChangeId(null)
+  }, [])
+
+  const handleDescribeSave = useCallback(async (changeId: string, message: string) => {
+    try {
+      const res = await fetch(`/api/describe?cwd=${encodeURIComponent(cwd)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changeId, message }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      setDescribingChangeId(null)
+    } catch (e) {
+      setEditError(String(e))
+    }
+  }, [cwd])
+
   const handleUndo = useCallback(async () => {
     if (!rebase.beforeOpId) return
     try {
@@ -215,10 +241,14 @@ export default function App() {
         rows={rows}
         cwd={cwd}
         rebase={rebase}
+        describingChangeId={describingChangeId}
         onRebaseStart={handleRebaseStart}
         onDestinationSelect={handleDestinationSelect}
         onEdit={handleEdit}
         onNew={handleNew}
+        onDescribeStart={handleDescribeStart}
+        onDescribeCancel={handleDescribeCancel}
+        onDescribeSave={handleDescribeSave}
       />
     </div>
   )

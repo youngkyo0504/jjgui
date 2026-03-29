@@ -428,3 +428,72 @@ body {
   color: var(--fg);
 }
 
+/* Describe editor */
+.describe-editor {
+  padding: 8px var(--row-padding-x);
+}
+
+.describe-textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.describe-textarea:focus {
+  border-color: var(--blue);
+}
+
+.describe-textarea::placeholder {
+  color: var(--fg-dim);
+}
+
+.describe-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.describe-btn {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: opacity 0.15s ease;
+}
+
+.describe-btn--save {
+  background: var(--blue);
+  color: var(--bg);
+  border-color: var(--blue);
+}
+
+.describe-btn--save:hover {
+  opacity: 0.9;
+}
+
+.describe-btn--cancel {
+  background: none;
+  color: var(--fg);
+}
+
+.describe-btn--cancel:hover {
+  border-color: var(--fg-dim);
+}
+
+.describe-loading {
+  color: var(--fg-dim);
+  font-size: 12px;
+  padding: 4px 0;
+}
+
