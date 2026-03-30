@@ -45,10 +45,11 @@ interface Props {
   onSquashStart: (changeId: string, description: string, parentDescription: string) => void
   onMoveChangesStart: (changeId: string) => void
   onPushBookmark: (bookmark: string) => void
+  onPushBookmarkSubtree: (bookmark: string) => void
   pushingBookmarks: Set<string>
 }
 
-export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, pushingBookmarks }: Props) {
+export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [bookmarkContextMenu, setBookmarkContextMenu] = useState<{ x: number; y: number; name: string } | null>(null)
@@ -265,6 +266,12 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
               disabled: pushingBookmarks.has(bookmarkContextMenu.name),
               onClick: () => onPushBookmark(bookmarkContextMenu.name),
             },
+            {
+              label: 'Push with descendants',
+              disabled: pushingBookmarks.has(bookmarkContextMenu.name),
+              onClick: () => onPushBookmarkSubtree(bookmarkContextMenu.name),
+            },
+            { type: 'separator' as const },
             {
               label: 'Rename bookmark',
               onClick: () => onBookmarkRename(bookmarkContextMenu.name),

@@ -257,7 +257,8 @@ export async function handleRequest(req: Request): Promise<Response> {
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     try {
       const body = await req.json()
-      const output = await pushBookmark(cwd, body.bookmark, body.remote, body.force ?? false)
+      const scope = body.scope === 'subtree' ? 'subtree' : 'bookmark'
+      const output = await pushBookmark(cwd, body.bookmark, body.remote, scope)
       return Response.json({ ok: true, output })
     } catch (e) {
       return Response.json({ ok: false, error: String(e) }, { status: 500 })

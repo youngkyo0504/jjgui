@@ -40,6 +40,8 @@ export interface FetchAllRemotesResult {
   results: RemoteFetchResult[]
 }
 
+export type PushScope = 'bookmark' | 'subtree'
+
 const GRAPH_CHARS = new Set([
   '│', '○', '◆', '@', '~', '├', '╯', '─', '╰', '╮', '╭', '┤', '┬', '┴', '┼',
   ' ', '|', '*',
@@ -370,13 +372,11 @@ export async function bookmarkSet(cwd: string, name: string, changeId: string, a
   }
 }
 
-/** bookmark을 git remote에 push한다 */
-export async function pushBookmark(cwd: string, bookmark: string, remote: string, force: boolean = false): Promise<string> {
-  const proc = force
-    ? $`jj git push -b ${bookmark} --remote ${remote} --allow-new`.cwd(cwd).quiet()
-    : $`jj git push -b ${bookmark} --remote ${remote}`.cwd(cwd).quiet()
-  const result = await proc
-  const stdout = result.stdout.toString()
-  const stderr = result.stderr.toString()
-  return stdout + stderr
+/** bookmark 또는 bookmark subtree를 git remote에 push한다 */
+export async function pushBookmark(cwd: string, bookmark: string, remote: string, scope: PushScope = 'bookmark'): Promise<string> {
+  const result = scope === 'subtree'
+    ? await $`jj git push -r ${`${bookmark}::`} --remote ${remote}`.cwd(cwd).quiet()
+    : await $`jj git push -b ${bookmark} --remote ${remote}`.cwd(cwd).quiet()
+
+  return collectCommandOutput(result.stdout, result.stderr)
 }

@@ -74,6 +74,22 @@ export interface FetchState {
   beforeOpId?: string | null
 }
 
+export type PushScope = 'bookmark' | 'subtree'
+
+interface PushResult {
+  type: 'success' | 'error' | 'info'
+  message: string
+}
+
+function getPushTargetLabel(bookmark: string, scope: PushScope): string {
+  return scope === 'subtree' ? `${bookmark} subtree` : bookmark
+}
+
+function isPushUpToDate(output: string): boolean {
+  const normalized = output.toLowerCase()
+  return normalized.includes('nothing changed') || normalized.includes('already up to date')
+}
+
 export default function App() {
   const [rows, setRows] = useState<GraphRow[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -86,9 +102,9 @@ export default function App() {
   const [fileSelectModal, setFileSelectModal] = useState<{ type: 'split' | 'move-changes'; changeId: string; files: { path: string; status: string }[] } | null>(null)
   const [squashConfirm, setSquashConfirm] = useState<{ changeId: string; description: string; parentDescription: string } | null>(null)
   const [pushingBookmarks, setPushingBookmarks] = useState<Set<string>>(new Set())
-  const [pushResult, setPushResult] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
-  const [remoteSelect, setRemoteSelect] = useState<{ bookmark: string; remotes: string[] } | null>(null)
-  const [forcePushConfirm, setForcePushConfirm] = useState<{ bookmark: string; remote: string; error: string } | null>(null)
+  const [pushResult, setPushResult] = useState<PushResult | null>(null)
+  const [subtreePushConfirm, setSubtreePushConfirm] = useState<{ bookmark: string } | null>(null)
+  const [remoteSelect, setRemoteSelect] = useState<{ bookmark: string; remotes: string[]; scope: PushScope } | null>(null)
 
   const cwd = new URLSearchParams(window.location.search).get('cwd') ?? ''
 
@@ -427,31 +443,26 @@ export default function App() {
   }, [cwd, fetchState.beforeOpId])
 
   // Push handlers
-  const doPush = useCallback(async (bookmark: string, remote: string, force: boolean = false) => {
+  const doPush = useCallback(async (bookmark: string, remote: string, scope: PushScope = 'bookmark') => {
     setPushingBookmarks((prev) => new Set(prev).add(bookmark))
     setPushResult(null)
-    setForcePushConfirm(null)
     try {
       const res = await fetch(`/api/push?cwd=${encodeURIComponent(cwd)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookmark, remote, force }),
+        body: JSON.stringify({ bookmark, remote, scope }),
       })
       const data = await res.json()
       if (!data.ok) {
-        const errStr = data.error || ''
-        if (errStr.includes('non-fast-forward') || errStr.includes('rejected')) {
-          setForcePushConfirm({ bookmark, remote, error: errStr })
-        } else {
-          setPushResult({ type: 'error', message: errStr })
-        }
+        setPushResult({ type: 'error', message: data.error || 'Push failed' })
         return
       }
       const output = data.output || ''
-      if (output.includes('Nothing changed') || output.includes('already up to date')) {
-        setPushResult({ type: 'info', message: `${bookmark}: already up to date` })
+      const targetLabel = getPushTargetLabel(bookmark, scope)
+      if (isPushUpToDate(output)) {
+        setPushResult({ type: 'info', message: `${targetLabel}: already up to date` })
       } else {
-        setPushResult({ type: 'success', message: `${bookmark} pushed to ${remote}` })
+        setPushResult({ type: 'success', message: `${targetLabel} pushed to ${remote}` })
       }
       await fetchLog()
     } catch (e) {
@@ -461,7 +472,7 @@ export default function App() {
     }
   }, [cwd])
 
-  const handlePushBookmark = useCallback(async (bookmark: string) => {
+  const beginPush = useCallback(async (bookmark: string, scope: PushScope = 'bookmark') => {
     try {
       const res = await fetch(`/api/remotes?cwd=${encodeURIComponent(cwd)}`)
       const data = await res.json()
@@ -469,14 +480,29 @@ export default function App() {
       if (remotes.length === 0) {
         setPushResult({ type: 'error', message: 'No remotes configured' })
       } else if (remotes.length === 1) {
-        doPush(bookmark, remotes[0])
+        doPush(bookmark, remotes[0], scope)
       } else {
-        setRemoteSelect({ bookmark, remotes })
+        setRemoteSelect({ bookmark, remotes, scope })
       }
     } catch (e) {
       setPushResult({ type: 'error', message: String(e) })
     }
   }, [cwd, doPush])
+
+  const handlePushBookmark = useCallback((bookmark: string) => {
+    void beginPush(bookmark, 'bookmark')
+  }, [beginPush])
+
+  const handlePushBookmarkSubtree = useCallback((bookmark: string) => {
+    setSubtreePushConfirm({ bookmark })
+  }, [])
+
+  const handlePushBookmarkSubtreeConfirm = useCallback(() => {
+    if (!subtreePushConfirm) return
+    const { bookmark } = subtreePushConfirm
+    setSubtreePushConfirm(null)
+    void beginPush(bookmark, 'subtree')
+  }, [beginPush, subtreePushConfirm])
 
   const handleUndo = useCallback(async () => {
     if (!rebase.beforeOpId) return
@@ -576,6 +602,7 @@ export default function App() {
         onSquashStart={handleSquashStart}
         onMoveChangesStart={handleMoveChangesStart}
         onPushBookmark={handlePushBookmark}
+        onPushBookmarkSubtree={handlePushBookmarkSubtree}
         pushingBookmarks={pushingBookmarks}
       />
       {bookmarkModal && bookmarkModal.mode === 'rename' && (
@@ -621,13 +648,22 @@ export default function App() {
           onCancel={() => setSquashConfirm(null)}
         />
       )}
+      {subtreePushConfirm && (
+        <ConfirmModal
+          title="Push bookmark subtree?"
+          message={`This will push ${subtreePushConfirm.bookmark} and any descendant bookmarks that point into its subtree.`}
+          confirmLabel="Continue"
+          onConfirm={handlePushBookmarkSubtreeConfirm}
+          onCancel={() => setSubtreePushConfirm(null)}
+        />
+      )}
       {remoteSelect && (
         <div className="modal-overlay" onClick={() => setRemoteSelect(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">Select remote for {remoteSelect.bookmark}</div>
+            <div className="modal-title">Select remote for {getPushTargetLabel(remoteSelect.bookmark, remoteSelect.scope)}</div>
             <div className="remote-list">
               {remoteSelect.remotes.map((r) => (
-                <button key={r} className="remote-item" onClick={() => { doPush(remoteSelect.bookmark, r); setRemoteSelect(null) }}>
+                <button key={r} className="remote-item" onClick={() => { doPush(remoteSelect.bookmark, r, remoteSelect.scope); setRemoteSelect(null) }}>
                   {r}
                 </button>
               ))}
@@ -637,15 +673,6 @@ export default function App() {
             </div>
           </div>
         </div>
-      )}
-      {forcePushConfirm && (
-        <ConfirmModal
-          title="Force push?"
-          message={`Push failed: ${forcePushConfirm.error}\n\nForce push ${forcePushConfirm.bookmark} to ${forcePushConfirm.remote}?`}
-          confirmLabel="Force Push"
-          onConfirm={() => { doPush(forcePushConfirm.bookmark, forcePushConfirm.remote, true); setForcePushConfirm(null) }}
-          onCancel={() => setForcePushConfirm(null)}
-        />
       )}
       {pushResult && (
         <div className={`push-toast push-toast--${pushResult.type}`}>

@@ -48,10 +48,11 @@ interface Props {
   onSquashStart: (changeId: string, description: string, parentDescription: string) => void
   onMoveChangesStart: (changeId: string) => void
   onPushBookmark: (bookmark: string) => void
+  onPushBookmarkSubtree: (bookmark: string) => void
   pushingBookmarks: Set<string>
 }
 
-export default function LogView({ rows, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, pushingBookmarks }: Props) {
+export default function LogView({ rows, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks }: Props) {
   return (
     <div className="log-view">
       {rows.map((row, i) => {
@@ -81,6 +82,7 @@ export default function LogView({ rows, cwd, rebase, moveChanges, describingChan
               onSquashStart={onSquashStart}
               onMoveChangesStart={onMoveChangesStart}
               onPushBookmark={onPushBookmark}
+              onPushBookmarkSubtree={onPushBookmarkSubtree}
               pushingBookmarks={pushingBookmarks}
             />
           )
