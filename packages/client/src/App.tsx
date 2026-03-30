@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import LogView from './components/LogView'
 import RebaseBanner from './components/RebaseBanner'
 import MoveChangesBanner from './components/MoveChangesBanner'
+import FetchBanner from './components/FetchBanner'
 import BookmarkModal from './components/BookmarkModal'
 import SetBookmarkModal from './components/SetBookmarkModal'
 import FileSelectModal from './components/FileSelectModal'
@@ -59,12 +60,27 @@ export interface MoveChangesState {
   beforeOpId?: string
 }
 
+export type FetchPhase = 'idle' | 'executing'
+
+export interface FetchRemoteResult {
+  remote: string
+  ok: boolean
+  output: string
+}
+
+export interface FetchState {
+  phase: FetchPhase
+  results?: FetchRemoteResult[]
+  beforeOpId?: string | null
+}
+
 export default function App() {
   const [rows, setRows] = useState<GraphRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [rebase, setRebase] = useState<RebaseState>({ phase: 'idle' })
   const [moveChanges, setMoveChanges] = useState<MoveChangesState>({ phase: 'idle' })
+  const [fetchState, setFetchState] = useState<FetchState>({ phase: 'idle' })
   const [describingChangeId, setDescribingChangeId] = useState<string | null>(null)
   const [bookmarkModal, setBookmarkModal] = useState<{ mode: 'set'; changeId: string } | { mode: 'rename'; bookmarkName: string } | null>(null)
   const [fileSelectModal, setFileSelectModal] = useState<{ type: 'split' | 'move-changes'; changeId: string; files: { path: string; status: string }[] } | null>(null)
@@ -366,6 +382,50 @@ export default function App() {
     }
   }, [cwd, moveChanges.beforeOpId])
 
+  const handleFetch = useCallback(async () => {
+    setFetchState({ phase: 'executing' })
+    try {
+      const res = await fetch(`/api/fetch?cwd=${encodeURIComponent(cwd)}`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      setFetchState({
+        phase: 'idle',
+        results: data.results || [],
+        beforeOpId: data.beforeOpId ?? null,
+      })
+      await fetchLog()
+    } catch (e) {
+      setFetchState({
+        phase: 'idle',
+        results: [{ remote: 'fetch', ok: false, output: String(e) }],
+        beforeOpId: null,
+      })
+    }
+  }, [cwd])
+
+  const handleFetchUndo = useCallback(async () => {
+    if (!fetchState.beforeOpId) return
+    try {
+      const res = await fetch(`/api/undo?cwd=${encodeURIComponent(cwd)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operationId: fetchState.beforeOpId }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      setFetchState({ phase: 'idle' })
+      await fetchLog()
+    } catch (e) {
+      setEditError(String(e))
+    }
+  }, [cwd, fetchState.beforeOpId])
+
   // Push handlers
   const doPush = useCallback(async (bookmark: string, remote: string, force: boolean = false) => {
     setPushingBookmarks((prev) => new Set(prev).add(bookmark))
@@ -467,10 +527,22 @@ export default function App() {
 
   if (error) return <div className="app-error">Error: {error}</div>
 
+  const isFetchDisabled = fetchState.phase === 'executing' || rebase.phase !== 'idle' || moveChanges.phase !== 'idle'
+
   return (
     <div className="app">
-      <div className="app-header">visual-jj — {cwd}</div>
+      <div className="app-toolbar">
+        <div className="app-header">visual-jj — {cwd}</div>
+        <button className="app-toolbar-btn" onClick={handleFetch} disabled={isFetchDisabled}>
+          {fetchState.phase === 'executing' ? 'Fetching...' : 'Fetch'}
+        </button>
+      </div>
       {editError && <ErrorBanner message={editError} onClose={() => setEditError(null)} />}
+      <FetchBanner
+        fetchState={fetchState}
+        onUndo={handleFetchUndo}
+        onDismiss={() => setFetchState({ phase: 'idle' })}
+      />
       <RebaseBanner
         rebase={rebase}
         onCancel={handleRebaseCancel}

@@ -71,12 +71,45 @@ body {
   max-width: 1200px;
 }
 
-.app-header {
-  color: var(--fg-dim);
-  font-size: 11px;
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
+}
+
+.app-header {
+  color: var(--fg-dim);
+  font-size: 11px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-toolbar-btn {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.app-toolbar-btn:hover {
+  border-color: var(--blue);
+}
+
+.app-toolbar-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .app-error {
@@ -152,7 +185,7 @@ body {
 /* Commit info */
 .commit-info {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   min-width: 0;
@@ -162,11 +195,19 @@ body {
 
 .commit-chevron {
   color: var(--fg-dim);
-  font-size: 10px;
-  width: 12px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
   user-select: none;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+}
+
+.commit-chevron svg {
+  display: block;
 }
 
 .commit-change-id {
@@ -386,6 +427,104 @@ body {
   opacity: 0.9;
 }
 
+.fetch-banner {
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.fetch-banner--success {
+  border-color: var(--green);
+}
+
+.fetch-banner--partial {
+  border-color: var(--orange);
+}
+
+.fetch-banner--error {
+  border-color: var(--red);
+}
+
+.fetch-banner-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fetch-banner-text {
+  flex: 1;
+  color: var(--fg);
+}
+
+.fetch-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.fetch-result {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.fetch-result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fetch-result-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.fetch-result-status--success {
+  background: var(--green);
+  color: var(--bg);
+}
+
+.fetch-result-status--error {
+  background: var(--red);
+  color: var(--bg);
+}
+
+.fetch-result-remote {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.fetch-result-details {
+  margin-top: 6px;
+}
+
+.fetch-result-details summary {
+  cursor: pointer;
+  color: var(--fg-muted);
+}
+
+.fetch-result-output {
+  margin-top: 6px;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
 /* Context menu */
 .context-menu {
   position: fixed;
@@ -425,6 +564,12 @@ body {
 
 .context-menu-item--disabled:hover {
   background: none;
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border);
 }
 
 /* Error banner */
@@ -786,4 +931,3 @@ body {
   font-size: 12px;
   color: var(--fg-dim);
 }
-

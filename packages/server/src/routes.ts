@@ -1,4 +1,4 @@
-import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit, bookmarkCreate, bookmarkMove, bookmarkDelete, bookmarkRename, bookmarkList, bookmarkSet, splitCommit, squashCommit, moveChanges, getRemotes, pushBookmark } from './jj'
+import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit, bookmarkCreate, bookmarkMove, bookmarkDelete, bookmarkRename, bookmarkList, bookmarkSet, splitCommit, squashCommit, moveChanges, getRemotes, pushBookmark, fetchAllRemotes } from './jj'
 
 // cwd별 SSE 클라이언트 관리
 const sseClients = new Map<string, Set<ReadableStreamDefaultController>>()
@@ -259,6 +259,21 @@ export async function handleRequest(req: Request): Promise<Response> {
       const body = await req.json()
       const output = await pushBookmark(cwd, body.bookmark, body.remote, body.force ?? false)
       return Response.json({ ok: true, output })
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/fetch?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/fetch') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const result = await fetchAllRemotes(cwd)
+      if (result.results.some((item) => item.ok)) {
+        notifyClients(cwd)
+      }
+      return Response.json({ ok: true, ...result })
     } catch (e) {
       return Response.json({ ok: false, error: String(e) }, { status: 500 })
     }

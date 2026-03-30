@@ -1,10 +1,8 @@
 import { useEffect, useRef } from 'react'
 
-interface MenuItem {
-  label: string
-  disabled?: boolean
-  onClick: () => void
-}
+type MenuItem =
+  | { type?: 'item'; label: string; disabled?: boolean; onClick: () => void }
+  | { type: 'separator' }
 
 interface Props {
   x: number
@@ -53,19 +51,23 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
 
   return (
     <div className="context-menu" ref={ref} style={{ left: x, top: y }}>
-      {items.map((item) => (
-        <button
-          key={item.label}
-          className={`context-menu-item${item.disabled ? ' context-menu-item--disabled' : ''}`}
-          disabled={item.disabled}
-          onClick={() => {
-            item.onClick()
-            onClose()
-          }}
-        >
-          {item.label}
-        </button>
-      ))}
+      {items.map((item, i) =>
+        item.type === 'separator' ? (
+          <div key={`sep-${i}`} className="context-menu-separator" />
+        ) : (
+          <button
+            key={item.label}
+            className={`context-menu-item${item.disabled ? ' context-menu-item--disabled' : ''}`}
+            disabled={item.disabled}
+            onClick={() => {
+              item.onClick()
+              onClose()
+            }}
+          >
+            {item.label}
+          </button>
+        ),
+      )}
     </div>
   )
 }

@@ -29,6 +29,17 @@ export interface ChangedFile {
   status: string
 }
 
+export interface RemoteFetchResult {
+  remote: string
+  ok: boolean
+  output: string
+}
+
+export interface FetchAllRemotesResult {
+  beforeOpId: string | null
+  results: RemoteFetchResult[]
+}
+
 const GRAPH_CHARS = new Set([
   '│', '○', '◆', '@', '~', '├', '╯', '─', '╰', '╮', '╭', '┤', '┬', '┴', '┼',
   ' ', '|', '*',
@@ -202,9 +213,17 @@ export async function newCommit(cwd: string, changeId: string): Promise<void> {
 
 export type RebaseMode = 'source' | 'revision' | 'branch'
 
+function collectCommandOutput(stdout?: { toString(): string }, stderr?: { toString(): string }): string {
+  return [stdout?.toString().trim(), stderr?.toString().trim()].filter(Boolean).join('\n')
+}
+
+function formatCommandError(e: any): string {
+  return collectCommandOutput(e.stdout, e.stderr) || e.message || String(e)
+}
+
 /** 현재 최신 operation id를 가져온다 */
 async function getCurrentOperationId(cwd: string): Promise<string> {
-  const result = await $`jj op log --no-graph -T 'self.id().short() ++ "\n"' --limit 1`.cwd(cwd).text()
+  const result = await $`jj --ignore-working-copy op log --no-graph -T 'self.id().short() ++ "\n"' --limit 1`.cwd(cwd).text()
   return result.trim()
 }
 
@@ -293,8 +312,43 @@ export async function moveChanges(cwd: string, fromChangeId: string, toChangeId:
 
 /** git remote 목록을 가져온다 */
 export async function getRemotes(cwd: string): Promise<string[]> {
-  const result = await $`jj git remote list`.cwd(cwd).text()
+  const result = await $`jj --ignore-working-copy git remote list`.cwd(cwd).text()
   return result.split('\n').filter(Boolean).map((line) => line.split(/\s+/)[0])
+}
+
+/** 모든 remote를 순차적으로 fetch하고 remote별 결과를 반환한다 */
+export async function fetchAllRemotes(cwd: string): Promise<FetchAllRemotesResult> {
+  const remotes = await getRemotes(cwd)
+  if (remotes.length === 0) {
+    return { beforeOpId: null, results: [] }
+  }
+
+  const beforeOpId = await getCurrentOperationId(cwd)
+  const results: RemoteFetchResult[] = []
+  let anySuccess = false
+
+  for (const remote of remotes) {
+    try {
+      const result = await $`jj git fetch --remote ${remote}`.cwd(cwd).quiet()
+      results.push({
+        remote,
+        ok: true,
+        output: collectCommandOutput(result.stdout, result.stderr),
+      })
+      anySuccess = true
+    } catch (e: any) {
+      results.push({
+        remote,
+        ok: false,
+        output: formatCommandError(e),
+      })
+    }
+  }
+
+  return {
+    beforeOpId: anySuccess ? beforeOpId : null,
+    results,
+  }
 }
 
 /** 로컬 bookmark 목록을 가져온다 */

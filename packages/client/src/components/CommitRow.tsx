@@ -145,7 +145,14 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
           {commit.isEmpty && <Badge label="empty" variant="empty" />}
 
           {!isAnyMoveMode && (
-            <span className="commit-chevron">{expanded ? '▾' : '▸'}</span>
+            <span className="commit-chevron">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                {expanded
+                  ? <path d="M4.427 5.427a.75.75 0 0 1 1.06-.013L8 7.846l2.513-2.432a.75.75 0 1 1 1.042 1.08l-3.034 2.933a.75.75 0 0 1-1.042 0L4.445 6.494a.75.75 0 0 1-.018-1.067z" />
+                  : <path d="M5.427 11.573a.75.75 0 0 1-.013-1.06L7.846 8 5.414 5.487a.75.75 0 1 1 1.08-1.042l2.933 3.034a.75.75 0 0 1 0 1.042L6.494 11.555a.75.75 0 0 1-1.067.018z" />
+                }
+              </svg>
+            </span>
           )}
           <span className="commit-description">
             {commit.description}
@@ -198,6 +205,7 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
           x={contextMenu.x}
           y={contextMenu.y}
           items={[
+            // 커밋 전환
             ...(!commit.isWorkingCopy ? [{
               label: 'Edit this commit',
               disabled: commit.isImmutable,
@@ -207,6 +215,8 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
               label: 'New commit on top',
               onClick: () => onNew(commit.changeId),
             },
+            // 커밋 수정
+            { type: 'separator' as const },
             {
               label: 'Describe',
               disabled: commit.isImmutable,
@@ -222,20 +232,23 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
               disabled: commit.isImmutable,
               onClick: () => onSquashStart(commit.changeId, commit.description, commit.parents[0] ?? ''),
             },
+            // 이동·재배치
+            { type: 'separator' as const },
             {
               label: 'Move changes from here',
               disabled: commit.isImmutable || commit.isEmpty,
               onClick: () => onMoveChangesStart(commit.changeId),
             },
             {
-              label: 'Set bookmark',
-              disabled: commit.isImmutable,
-              onClick: () => onSetBookmark(commit.changeId),
-            },
-            {
               label: 'Rebase this subtree',
               disabled: commit.isImmutable,
               onClick: () => onRebaseStart(commit.changeId, commit.description),
+            },
+            // 북마크
+            { type: 'separator' as const },
+            {
+              label: 'Set bookmark',
+              onClick: () => onSetBookmark(commit.changeId),
             },
           ]}
           onClose={() => setContextMenu(null)}
