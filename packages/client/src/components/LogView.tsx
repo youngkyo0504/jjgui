@@ -2,30 +2,7 @@ import CommitRow from './CommitRow'
 import EdgeRow from './EdgeRow'
 import ElidedRow from './ElidedRow'
 import type { RebaseState, MoveChangesState } from '../App'
-
-interface CommitInfo {
-  changeId: string
-  commitId: string
-  description: string
-  author: string
-  timestamp: string
-  workspaces: string[]
-  bookmarks: string[]
-  parents: string[]
-  isWorkingCopy: boolean
-  isImmutable: boolean
-  hasConflict: boolean
-  isEmpty: boolean
-  isHidden: boolean
-}
-
-interface GraphRow {
-  graphChars: string
-  type: 'commit' | 'edge' | 'elided'
-  indent: number
-  laneColors?: string[]
-  commit?: CommitInfo
-}
+import type { GraphRow } from '../types'
 
 interface Props {
   rows: GraphRow[]
@@ -50,9 +27,10 @@ interface Props {
   onPushBookmark: (bookmark: string) => void
   onPushBookmarkSubtree: (bookmark: string) => void
   pushingBookmarks: Set<string>
+  showRemoteBookmarks: boolean
 }
 
-export default function LogView({ rows, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks }: Props) {
+export default function LogView({ rows, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks, showRemoteBookmarks }: Props) {
   return (
     <div className="log-view">
       {rows.map((row, i) => {
@@ -84,6 +62,7 @@ export default function LogView({ rows, cwd, rebase, moveChanges, describingChan
               onPushBookmark={onPushBookmark}
               onPushBookmarkSubtree={onPushBookmarkSubtree}
               pushingBookmarks={pushingBookmarks}
+              showRemoteBookmarks={showRemoteBookmarks}
             />
           )
         }

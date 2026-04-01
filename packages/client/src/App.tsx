@@ -9,31 +9,8 @@ import FileSelectModal from './components/FileSelectModal'
 import ConfirmModal from './components/ConfirmModal'
 import ErrorBanner from './components/ErrorBanner'
 import { buildChildrenMap, getDescendants } from './utils/graph'
+import type { GraphRow } from './types'
 import './components/styles.css'
-
-interface CommitInfo {
-  changeId: string
-  commitId: string
-  description: string
-  author: string
-  timestamp: string
-  workspaces: string[]
-  bookmarks: string[]
-  parents: string[]
-  isWorkingCopy: boolean
-  isImmutable: boolean
-  hasConflict: boolean
-  isEmpty: boolean
-  isHidden: boolean
-}
-
-interface GraphRow {
-  graphChars: string
-  type: 'commit' | 'edge' | 'elided'
-  indent: number
-  laneColors?: string[]
-  commit?: CommitInfo
-}
 
 export type RebasePhase = 'idle' | 'source-selected' | 'confirming' | 'executing'
 
@@ -94,6 +71,7 @@ export default function App() {
   const [rows, setRows] = useState<GraphRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
+  const [showRemoteBookmarks, setShowRemoteBookmarks] = useState(false)
   const [rebase, setRebase] = useState<RebaseState>({ phase: 'idle' })
   const [moveChanges, setMoveChanges] = useState<MoveChangesState>({ phase: 'idle' })
   const [fetchState, setFetchState] = useState<FetchState>({ phase: 'idle' })
@@ -109,6 +87,10 @@ export default function App() {
   const cwd = new URLSearchParams(window.location.search).get('cwd') ?? ''
 
   const childrenMap = useMemo(() => buildChildrenMap(rows), [rows])
+  const hasRemoteBookmarks = useMemo(
+    () => rows.some((row) => row.type === 'commit' && row.commit?.bookmarks.some((bookmark) => bookmark.isRemote)),
+    [rows],
+  )
 
   const fetchLog = async () => {
     if (!cwd) {
@@ -559,6 +541,14 @@ export default function App() {
     <div className="app">
       <div className="app-toolbar">
         <div className="app-header">visual-jj — {cwd}</div>
+        {hasRemoteBookmarks && (
+          <button
+            className={`app-toolbar-btn ${showRemoteBookmarks ? 'app-toolbar-btn--active' : ''}`}
+            onClick={() => setShowRemoteBookmarks((prev) => !prev)}
+          >
+            Remote refs {showRemoteBookmarks ? 'On' : 'Off'}
+          </button>
+        )}
         <button className="app-toolbar-btn" onClick={handleFetch} disabled={isFetchDisabled}>
           {fetchState.phase === 'executing' ? 'Fetching...' : 'Fetch'}
         </button>
@@ -604,6 +594,7 @@ export default function App() {
         onPushBookmark={handlePushBookmark}
         onPushBookmarkSubtree={handlePushBookmarkSubtree}
         pushingBookmarks={pushingBookmarks}
+        showRemoteBookmarks={showRemoteBookmarks}
       />
       {bookmarkModal && bookmarkModal.mode === 'rename' && (
         <BookmarkModal
@@ -619,7 +610,7 @@ export default function App() {
         <SetBookmarkModal
           changeId={bookmarkModal.changeId}
           cwd={cwd}
-          onSuccess={() => { setBookmarkModal(null); fetchLog() }}
+          onSuccess={async () => { setBookmarkModal(null); await fetchLog() }}
           onCancel={() => setBookmarkModal(null)}
           onError={(err) => { setBookmarkModal(null); setEditError(err) }}
         />

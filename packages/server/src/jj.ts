@@ -7,13 +7,20 @@ export interface CommitInfo {
   author: string
   timestamp: string
   workspaces: string[]
-  bookmarks: string[]
+  bookmarks: BookmarkRef[]
   parents: string[]
   isWorkingCopy: boolean
   isImmutable: boolean
   hasConflict: boolean
   isEmpty: boolean
   isHidden: boolean
+}
+
+export interface BookmarkRef {
+  name: string
+  remote: string | null
+  displayName: string
+  isRemote: boolean
 }
 
 export interface GraphRow {
@@ -65,7 +72,11 @@ const TEMPLATE = [
   '"\x1f"',
   'working_copies',
   '"\x1f"',
-  'bookmarks',
+  'local_bookmarks.map(|b| b.name()).join(" ")',
+  '"\x1f"',
+  'remote_bookmarks.map(|b| b.name()).join(" ")',
+  '"\x1f"',
+  'remote_bookmarks.map(|b| b.remote()).join(" ")',
   '"\x1f"',
   'parents.map(|p| p.change_id().short()).join(" ")',
   '"\x1f"',
@@ -116,8 +127,10 @@ function splitGraphAndData(line: string): { graphPrefix: string; data: string } 
 function parseCommitData(data: string, graphPrefix: string): CommitInfo {
   const fields = data.split('\x1f')
   const workspacesRaw = fields[5] ?? ''
-  const bookmarksRaw = fields[6] ?? ''
-  const parentsRaw = fields[7] ?? ''
+  const localBookmarksRaw = fields[6] ?? ''
+  const remoteBookmarkNamesRaw = fields[7] ?? ''
+  const remoteBookmarkRemotesRaw = fields[8] ?? ''
+  const parentsRaw = fields[9] ?? ''
 
   return {
     changeId: fields[0] ?? '',
@@ -126,14 +139,44 @@ function parseCommitData(data: string, graphPrefix: string): CommitInfo {
     author: fields[3] ?? '',
     timestamp: fields[4] ?? '',
     workspaces: workspacesRaw ? workspacesRaw.split(/\s+/).filter((w) => w.endsWith('@')) : [],
-    bookmarks: bookmarksRaw ? bookmarksRaw.split(/\s+/).filter(Boolean) : [],
+    bookmarks: parseBookmarkRefs(localBookmarksRaw, remoteBookmarkNamesRaw, remoteBookmarkRemotesRaw),
     parents: parentsRaw ? parentsRaw.split(/\s+/).filter(Boolean) : [],
     isWorkingCopy: graphPrefix.includes('@'),
     isImmutable: graphPrefix.includes('◆'),
-    hasConflict: fields[9] === 'true',
-    isEmpty: fields[10] === 'true',
-    isHidden: fields[11] === 'true',
+    hasConflict: fields[11] === 'true',
+    isEmpty: fields[12] === 'true',
+    isHidden: fields[13] === 'true',
   }
+}
+
+function parseBookmarkRefs(localBookmarksRaw: string, remoteBookmarkNamesRaw: string, remoteBookmarkRemotesRaw: string): BookmarkRef[] {
+  const localBookmarks = localBookmarksRaw
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((name) => ({
+      name,
+      remote: null,
+      displayName: name,
+      isRemote: false,
+    }))
+
+  const remoteBookmarkNames = remoteBookmarkNamesRaw.split(/\s+/).filter(Boolean)
+  const remoteBookmarkRemotes = remoteBookmarkRemotesRaw.split(/\s+/).filter(Boolean)
+  const remoteBookmarks = remoteBookmarkNames.flatMap((name, index) => {
+    const remote = remoteBookmarkRemotes[index] ?? null
+    if (remote === 'git') {
+      return []
+    }
+
+    return [{
+      name,
+      remote,
+      displayName: remote ? `${name}@${remote}` : name,
+      isRemote: true,
+    }]
+  })
+
+  return [...localBookmarks, ...remoteBookmarks]
 }
 
 function computeIndent(graphPrefix: string): number {
@@ -355,8 +398,19 @@ export async function fetchAllRemotes(cwd: string): Promise<FetchAllRemotesResul
 
 /** 로컬 bookmark 목록을 가져온다 */
 export async function bookmarkList(cwd: string): Promise<string[]> {
-  const result = await $`jj bookmark list --template 'name ++ "\n"'`.cwd(cwd).text()
-  return result.split('\n').filter(Boolean)
+  const result = await $`jj bookmark list --template 'name ++ "\x1f" ++ remote ++ "\n"'`.cwd(cwd).text()
+  const localBookmarks: string[] = []
+  const seen = new Set<string>()
+
+  for (const line of result.split('\n')) {
+    if (!line) continue
+    const [name, remote = ''] = line.split('\x1f')
+    if (!name || remote || seen.has(name)) continue
+    seen.add(name)
+    localBookmarks.push(name)
+  }
+
+  return localBookmarks
 }
 
 /** bookmark을 설정한다 (존재하면 move, 없으면 create) */

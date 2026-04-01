@@ -5,22 +5,7 @@ import FileList from './FileList'
 import ContextMenu from './ContextMenu'
 import { formatRelativeTime } from '../utils/format'
 import type { RebaseState, MoveChangesState } from '../App'
-
-interface CommitInfo {
-  changeId: string
-  commitId: string
-  description: string
-  author: string
-  timestamp: string
-  workspaces: string[]
-  bookmarks: string[]
-  parents: string[]
-  isWorkingCopy: boolean
-  isImmutable: boolean
-  hasConflict: boolean
-  isEmpty: boolean
-  isHidden: boolean
-}
+import type { BookmarkRef, CommitInfo } from '../types'
 
 interface Props {
   graphChars: string
@@ -47,12 +32,13 @@ interface Props {
   onPushBookmark: (bookmark: string) => void
   onPushBookmarkSubtree: (bookmark: string) => void
   pushingBookmarks: Set<string>
+  showRemoteBookmarks: boolean
 }
 
-export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks }: Props) {
+export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks, showRemoteBookmarks }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
-  const [bookmarkContextMenu, setBookmarkContextMenu] = useState<{ x: number; y: number; name: string } | null>(null)
+  const [bookmarkContextMenu, setBookmarkContextMenu] = useState<{ x: number; y: number; bookmark: BookmarkRef } | null>(null)
   const [describeText, setDescribeText] = useState('')
   const [describeLoading, setDescribeLoading] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -107,11 +93,11 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
     setContextMenu({ x: e.clientX, y: e.clientY })
   }
 
-  const handleBookmarkContextMenu = (e: React.MouseEvent, name: string) => {
-    if (isAnyMoveMode) return
+  const handleBookmarkContextMenu = (e: React.MouseEvent, bookmark: BookmarkRef) => {
+    if (isAnyMoveMode || bookmark.isRemote) return
     e.preventDefault()
     e.stopPropagation()
-    setBookmarkContextMenu({ x: e.clientX, y: e.clientY, name })
+    setBookmarkContextMenu({ x: e.clientX, y: e.clientY, bookmark })
   }
 
   const rowClass = [
@@ -127,6 +113,9 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
     isRebaseMode && !isInSubtree && 'graph-row--rebase-target',
     isMoveChangesMode && 'graph-row--rebase-target',
   ].filter(Boolean).join(' ')
+  const visibleBookmarks = showRemoteBookmarks
+    ? commit.bookmarks
+    : commit.bookmarks.filter((bookmark) => !bookmark.isRemote)
 
   return (
     <div>
@@ -137,9 +126,17 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
           {commit.workspaces.map((ws) => (
             <Badge key={ws} label={ws} variant="workspace" />
           ))}
-          {commit.bookmarks.map((bm) => (
-            <span key={bm} onContextMenu={(e) => handleBookmarkContextMenu(e, bm)} className={pushingBookmarks.has(bm) ? 'badge-pushing' : ''}>
-              <Badge label={pushingBookmarks.has(bm) ? `${bm} (pushing...)` : bm} variant="bookmark" />
+          {visibleBookmarks.map((bookmark) => (
+            <span
+              key={bookmark.displayName}
+              onContextMenu={(e) => handleBookmarkContextMenu(e, bookmark)}
+              className={!bookmark.isRemote && pushingBookmarks.has(bookmark.name) ? 'badge-pushing' : ''}
+              title={bookmark.isRemote && bookmark.remote ? `Remote bookmark from ${bookmark.remote}` : undefined}
+            >
+              <Badge
+                label={!bookmark.isRemote && pushingBookmarks.has(bookmark.name) ? `${bookmark.displayName} (pushing...)` : bookmark.displayName}
+                variant={bookmark.isRemote ? 'bookmark-remote' : 'bookmark'}
+              />
             </span>
           ))}
           {commit.hasConflict && <Badge label="conflict" variant="conflict" />}
@@ -262,23 +259,23 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
           y={bookmarkContextMenu.y}
           items={[
             {
-              label: pushingBookmarks.has(bookmarkContextMenu.name) ? 'Pushing...' : 'Push this bookmark',
-              disabled: pushingBookmarks.has(bookmarkContextMenu.name),
-              onClick: () => onPushBookmark(bookmarkContextMenu.name),
+              label: pushingBookmarks.has(bookmarkContextMenu.bookmark.name) ? 'Pushing...' : 'Push this bookmark',
+              disabled: pushingBookmarks.has(bookmarkContextMenu.bookmark.name),
+              onClick: () => onPushBookmark(bookmarkContextMenu.bookmark.name),
             },
             {
               label: 'Push with descendants',
-              disabled: pushingBookmarks.has(bookmarkContextMenu.name),
-              onClick: () => onPushBookmarkSubtree(bookmarkContextMenu.name),
+              disabled: pushingBookmarks.has(bookmarkContextMenu.bookmark.name),
+              onClick: () => onPushBookmarkSubtree(bookmarkContextMenu.bookmark.name),
             },
             { type: 'separator' as const },
             {
               label: 'Rename bookmark',
-              onClick: () => onBookmarkRename(bookmarkContextMenu.name),
+              onClick: () => onBookmarkRename(bookmarkContextMenu.bookmark.name),
             },
             {
               label: 'Delete bookmark',
-              onClick: () => onBookmarkDelete(bookmarkContextMenu.name),
+              onClick: () => onBookmarkDelete(bookmarkContextMenu.bookmark.name),
             },
           ]}
           onClose={() => setBookmarkContextMenu(null)}
