@@ -1,4 +1,4 @@
-import type { RebaseState } from '../App'
+import type { RebaseState } from '../repo/types'
 
 interface Props {
   rebase: RebaseState

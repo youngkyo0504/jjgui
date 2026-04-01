@@ -1,84 +1,17 @@
 import { useEffect, useState } from 'react'
 import ContextMenu from './ContextMenu'
-
-interface ChangedFile {
-  path: string
-  status: string
-}
-
-const fileListCache = new Map<string, ChangedFile[]>()
-const fileListRequests = new Map<string, Promise<ChangedFile[]>>()
-
-function getCacheKey(cwd: string, changeId: string): string {
-  return `${cwd}::${changeId}`
-}
-
-async function fetchChangedFiles(cwd: string, changeId: string): Promise<ChangedFile[]> {
-  const cacheKey = getCacheKey(cwd, changeId)
-  const existingRequest = fileListRequests.get(cacheKey)
-  if (existingRequest) return existingRequest
-
-  const request = fetch(`/api/show/${changeId}?cwd=${encodeURIComponent(cwd)}`)
-    .then((r) => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      return r.json()
-    })
-    .then((data) => {
-      const files = Array.isArray(data) ? data : []
-      fileListCache.set(cacheKey, files)
-      return files
-    })
-    .finally(() => {
-      fileListRequests.delete(cacheKey)
-    })
-
-  fileListRequests.set(cacheKey, request)
-  return request
-}
+import type { ChangedFile } from '../repo/types'
 
 interface Props {
-  changeId: string
-  cwd: string
-  refreshKey: number
+  files: ChangedFile[]
+  loading: boolean
   actionsDisabled: boolean
-  onDiscardFile: (changeId: string, path: string) => void
-  onMoveFile: (changeId: string, path: string) => void
+  onDiscardFile: (path: string) => void
+  onMoveFile: (path: string) => void
 }
 
-export default function FileList({ changeId, cwd, refreshKey, actionsDisabled, onDiscardFile, onMoveFile }: Props) {
-  const [files, setFiles] = useState<ChangedFile[]>([])
-  const [loading, setLoading] = useState(true)
+export default function FileList({ files, loading, actionsDisabled, onDiscardFile, onMoveFile }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: ChangedFile } | null>(null)
-
-  useEffect(() => {
-    const cacheKey = getCacheKey(cwd, changeId)
-    const cachedFiles = fileListCache.get(cacheKey)
-    let cancelled = false
-
-    if (cachedFiles) {
-      setFiles(cachedFiles)
-      setLoading(false)
-    } else {
-      setLoading(true)
-    }
-
-    fetchChangedFiles(cwd, changeId)
-      .then((nextFiles) => {
-        if (cancelled) return
-        setFiles(nextFiles)
-      })
-      .catch(() => {
-        if (cancelled || cachedFiles) return
-        setFiles([])
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [changeId, cwd, refreshKey])
 
   useEffect(() => {
     setContextMenu(null)
@@ -89,19 +22,19 @@ export default function FileList({ changeId, cwd, refreshKey, actionsDisabled, o
 
   return (
     <div className="file-list">
-      {files.map((f) => (
+      {files.map((file) => (
         <div
-          key={f.path}
+          key={file.path}
           className="file-list-item"
-          title={f.path}
-          onContextMenu={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            setContextMenu({ x: e.clientX, y: e.clientY, file: f })
+          title={file.path}
+          onContextMenu={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            setContextMenu({ x: event.clientX, y: event.clientY, file })
           }}
         >
-          <span className={`file-status file-status--${f.status}`}>{f.status}</span>
-          <span className="file-path">{f.path}</span>
+          <span className={`file-status file-status--${file.status}`}>{file.status}</span>
+          <span className="file-path">{file.path}</span>
         </div>
       ))}
       {contextMenu && (
@@ -112,12 +45,12 @@ export default function FileList({ changeId, cwd, refreshKey, actionsDisabled, o
             {
               label: '파일 변경사항 취소',
               disabled: actionsDisabled,
-              onClick: () => onDiscardFile(changeId, contextMenu.file.path),
+              onClick: () => onDiscardFile(contextMenu.file.path),
             },
             {
               label: '다른 커밋으로 옮기기',
               disabled: actionsDisabled,
-              onClick: () => onMoveFile(changeId, contextMenu.file.path),
+              onClick: () => onMoveFile(contextMenu.file.path),
             },
           ]}
           onClose={() => setContextMenu(null)}

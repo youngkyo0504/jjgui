@@ -1,4 +1,4 @@
-import type { MoveChangesState } from '../App'
+import type { MoveChangesState } from '../repo/types'
 
 interface Props {
   moveChanges: MoveChangesState

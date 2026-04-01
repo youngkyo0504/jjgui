@@ -1,4 +1,4 @@
-import type { FetchState } from '../App'
+import type { FetchState } from '../repo/types'
 
 interface Props {
   fetchState: FetchState

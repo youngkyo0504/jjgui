@@ -1,189 +1,120 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import SvgGraphCell from './SvgGraphCell'
 import Badge from './Badge'
 import FileList from './FileList'
 import ContextMenu from './ContextMenu'
 import { formatRelativeTime } from '../utils/format'
-import type { RebaseState, MoveChangesState } from '../App'
-import type { BookmarkRef, CommitInfo } from '../types'
+import type { BookmarkRef } from '../types'
+import type { CommitRowViewModel } from '../repo/useRepoScreen'
 
 interface Props {
-  graphChars: string
-  laneColors?: string[]
-  commit: CommitInfo
-  cwd: string
-  logRefreshKey: number
-  rebase: RebaseState
-  moveChanges: MoveChangesState
-  describingChangeId: string | null
-  onRebaseStart: (changeId: string, description: string) => void
-  onDestinationSelect: (changeId: string, description: string) => void
-  onMoveChangesDestinationSelect: (changeId: string, description: string) => void
-  onEdit: (changeId: string) => void
-  onNew: (changeId: string) => void
-  onDescribeStart: (changeId: string) => void
-  onDescribeCancel: () => void
-  onDescribeSave: (changeId: string, message: string) => void
-  onSetBookmark: (changeId: string) => void
-  onBookmarkDelete: (name: string) => void
-  onBookmarkRename: (name: string) => void
-  onSplitStart: (changeId: string) => void
-  onSquashStart: (changeId: string, description: string, parentDescription: string) => void
-  onMoveChangesStart: (changeId: string) => void
-  onMoveSingleFile: (changeId: string, path: string) => void
-  onDiscardFile: (changeId: string, path: string) => void
-  onPushBookmark: (bookmark: string) => void
-  onPushBookmarkSubtree: (bookmark: string) => void
-  pushingBookmarks: Set<string>
-  showRemoteBookmarks: boolean
+  row: CommitRowViewModel
 }
 
-export default function CommitRow({ graphChars, laneColors, commit, cwd, logRefreshKey, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onMoveSingleFile, onDiscardFile, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks, showRemoteBookmarks }: Props) {
-  const [expanded, setExpanded] = useState(false)
+export default function CommitRow({ row }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [bookmarkContextMenu, setBookmarkContextMenu] = useState<{ x: number; y: number; bookmark: BookmarkRef } | null>(null)
-  const [describeText, setDescribeText] = useState('')
-  const [describeLoading, setDescribeLoading] = useState(false)
+  const [describeText, setDescribeText] = useState(row.describeValue)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const isDescribing = describingChangeId === commit.changeId
-
-  // describe 편집 시작 시 전체 description fetch
   useEffect(() => {
-    if (!isDescribing) return
-    setDescribeLoading(true)
-    fetch(`/api/description/${commit.changeId}?cwd=${encodeURIComponent(cwd)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const desc = data.description === '(no description set)' ? '' : (data.description ?? '')
-        setDescribeText(desc)
-        setDescribeLoading(false)
-        setTimeout(() => textareaRef.current?.focus(), 0)
-      })
-      .catch(() => {
-        setDescribeText('')
-        setDescribeLoading(false)
-      })
-  }, [isDescribing, commit.changeId, cwd])
+    if (!row.isDescribing) return
+    setDescribeText(row.describeValue)
+    if (!row.describeLoading) {
+      setTimeout(() => textareaRef.current?.focus(), 0)
+    }
+  }, [row.isDescribing, row.describeLoading, row.describeValue, row.commit.changeId])
 
-  const isSource = rebase.sourceChangeId === commit.changeId
-  const isDescendant = rebase.descendants?.has(commit.changeId) ?? false
-  const isInSubtree = isSource || isDescendant
-  const isRebaseMode = rebase.phase === 'source-selected' || rebase.phase === 'confirming'
-  const isMoveChangesMode = moveChanges.phase === 'selecting-destination' || moveChanges.phase === 'confirming'
-  const isInteractionLocked = rebase.phase !== 'idle' || moveChanges.phase !== 'idle'
-  const isAnyMoveMode = isRebaseMode || isMoveChangesMode
-  const isDisabledTarget = isRebaseMode && isInSubtree
-  const isDestination = rebase.destinationChangeId === commit.changeId
-  const isMoveChangesDestination = moveChanges.toChangeId === commit.changeId
-
-  const handleClick = () => {
-    if (rebase.phase === 'source-selected' && !isInSubtree) {
-      onDestinationSelect(commit.changeId, commit.description)
-      return
-    }
-    if (moveChanges.phase === 'selecting-destination') {
-      onMoveChangesDestinationSelect(commit.changeId, commit.description)
-      return
-    }
-    if (!isInteractionLocked) {
-      setExpanded(!expanded)
-    }
+  const handleContextMenu = (event: React.MouseEvent) => {
+    if (row.state.isInteractionLocked) return
+    event.preventDefault()
+    setContextMenu({ x: event.clientX, y: event.clientY })
   }
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    if (isInteractionLocked) return
-    e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY })
-  }
-
-  const handleBookmarkContextMenu = (e: React.MouseEvent, bookmark: BookmarkRef) => {
-    if (isInteractionLocked || bookmark.isRemote) return
-    e.preventDefault()
-    e.stopPropagation()
-    setBookmarkContextMenu({ x: e.clientX, y: e.clientY, bookmark })
+  const handleBookmarkContextMenu = (event: React.MouseEvent, bookmark: BookmarkRef) => {
+    if (row.state.isInteractionLocked || bookmark.isRemote) return
+    event.preventDefault()
+    event.stopPropagation()
+    setBookmarkContextMenu({ x: event.clientX, y: event.clientY, bookmark })
   }
 
   const rowClass = [
     'graph-row',
     'graph-row--commit',
-    commit.isWorkingCopy && 'graph-row--working-copy',
-    commit.isImmutable && 'graph-row--immutable',
-    isSource && 'graph-row--rebase-source',
-    isDescendant && 'graph-row--rebase-descendant',
-    isDisabledTarget && 'graph-row--rebase-disabled',
-    isDestination && 'graph-row--rebase-destination',
-    isMoveChangesDestination && 'graph-row--rebase-destination',
-    isRebaseMode && !isInSubtree && 'graph-row--rebase-target',
-    isMoveChangesMode && 'graph-row--rebase-target',
+    row.commit.isWorkingCopy && 'graph-row--working-copy',
+    row.commit.isImmutable && 'graph-row--immutable',
+    row.state.isSource && 'graph-row--rebase-source',
+    row.state.isDescendant && 'graph-row--rebase-descendant',
+    row.state.isDisabledTarget && 'graph-row--rebase-disabled',
+    row.state.isDestination && 'graph-row--rebase-destination',
+    row.state.isMoveChangesDestination && 'graph-row--rebase-destination',
+    row.state.isRebaseMode && !row.state.isSource && !row.state.isDescendant && 'graph-row--rebase-target',
+    row.state.isMoveChangesMode && 'graph-row--rebase-target',
   ].filter(Boolean).join(' ')
-  const visibleBookmarks = showRemoteBookmarks
-    ? commit.bookmarks
-    : commit.bookmarks.filter((bookmark) => !bookmark.isRemote)
+
+  const isAnyMoveMode = row.state.isRebaseMode || row.state.isMoveChangesMode
 
   return (
     <div>
-      <div className={rowClass} onClick={handleClick} onContextMenu={handleContextMenu}>
-        <SvgGraphCell graphChars={graphChars} laneColors={laneColors} />
+      <div className={rowClass} onClick={row.actions.onRowClick} onContextMenu={handleContextMenu}>
+        <SvgGraphCell graphChars={row.graphChars} laneColors={row.laneColors} />
         <div className="commit-info">
-          {commit.isWorkingCopy && <Badge label="Editing" variant="editing" />}
-          {commit.workspaces.map((ws) => (
-            <Badge key={ws} label={ws} variant="workspace" />
+          {row.commit.isWorkingCopy && <Badge label="Editing" variant="editing" />}
+          {row.commit.workspaces.map((workspace) => (
+            <Badge key={workspace} label={workspace} variant="workspace" />
           ))}
-          {visibleBookmarks.map((bookmark) => (
+          {row.visibleBookmarks.map((bookmark) => (
             <span
               key={bookmark.displayName}
-              onContextMenu={(e) => handleBookmarkContextMenu(e, bookmark)}
-              className={!bookmark.isRemote && pushingBookmarks.has(bookmark.name) ? 'badge-pushing' : ''}
+              onContextMenu={(event) => handleBookmarkContextMenu(event, bookmark)}
+              className={!bookmark.isRemote && row.pushingBookmarks.has(bookmark.name) ? 'badge-pushing' : ''}
               title={bookmark.isRemote && bookmark.remote ? `Remote bookmark from ${bookmark.remote}` : undefined}
             >
               <Badge
-                label={!bookmark.isRemote && pushingBookmarks.has(bookmark.name) ? `${bookmark.displayName} (pushing...)` : bookmark.displayName}
+                label={!bookmark.isRemote && row.pushingBookmarks.has(bookmark.name)
+                  ? `${bookmark.displayName} (pushing...)`
+                  : bookmark.displayName}
                 variant={bookmark.isRemote ? 'bookmark-remote' : 'bookmark'}
               />
             </span>
           ))}
-          {commit.hasConflict && <Badge label="conflict" variant="conflict" />}
-          {commit.isEmpty && <Badge label="empty" variant="empty" />}
+          {row.commit.hasConflict && <Badge label="conflict" variant="conflict" />}
+          {row.commit.isEmpty && <Badge label="empty" variant="empty" />}
 
           {!isAnyMoveMode && (
             <span className="commit-chevron">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                {expanded
+                {row.isExpanded
                   ? <path d="M4.427 5.427a.75.75 0 0 1 1.06-.013L8 7.846l2.513-2.432a.75.75 0 1 1 1.042 1.08l-3.034 2.933a.75.75 0 0 1-1.042 0L4.445 6.494a.75.75 0 0 1-.018-1.067z" />
                   : <path d="M5.427 11.573a.75.75 0 0 1-.013-1.06L7.846 8 5.414 5.487a.75.75 0 1 1 1.08-1.042l2.933 3.034a.75.75 0 0 1 0 1.042L6.494 11.555a.75.75 0 0 1-1.067.018z" />
                 }
               </svg>
             </span>
           )}
-          <span className="commit-description">
-            {commit.description}
-          </span>
-
-          <span className="commit-timestamp">{formatRelativeTime(commit.timestamp)}</span>
-          <span className="commit-change-id">{commit.changeId.slice(0, 3)}</span>
+          <span className="commit-description">{row.commit.description}</span>
+          <span className="commit-timestamp">{formatRelativeTime(row.commit.timestamp)}</span>
+          <span className="commit-change-id">{row.commit.changeId.slice(0, 3)}</span>
         </div>
       </div>
 
-      {expanded && !isInteractionLocked && !isDescribing && (
+      {row.isExpanded && !row.state.isInteractionLocked && !row.isDescribing && (
         <div className="graph-row graph-row--file-list">
-          <SvgGraphCell graphChars={graphChars} laneColors={laneColors} lineOnly />
+          <SvgGraphCell graphChars={row.graphChars} laneColors={row.laneColors} lineOnly />
           <FileList
-            changeId={commit.changeId}
-            cwd={cwd}
-            refreshKey={logRefreshKey}
-            actionsDisabled={commit.isImmutable || isInteractionLocked}
-            onDiscardFile={onDiscardFile}
-            onMoveFile={onMoveSingleFile}
+            files={row.files}
+            loading={row.filesLoading}
+            actionsDisabled={row.actionsDisabled}
+            onDiscardFile={row.actions.onDiscardFile}
+            onMoveFile={row.actions.onMoveSingleFile}
           />
         </div>
       )}
 
-      {isDescribing && (
+      {row.isDescribing && (
         <div className="graph-row graph-row--file-list">
-          <SvgGraphCell graphChars={graphChars} laneColors={laneColors} lineOnly />
+          <SvgGraphCell graphChars={row.graphChars} laneColors={row.laneColors} lineOnly />
           <div className="describe-editor">
-            {describeLoading ? (
+            {row.describeLoading ? (
               <div className="describe-loading">Loading...</div>
             ) : (
               <>
@@ -191,15 +122,15 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, logRefr
                   ref={textareaRef}
                   className="describe-textarea"
                   value={describeText}
-                  onChange={(e) => setDescribeText(e.target.value)}
+                  onChange={(event) => setDescribeText(event.target.value)}
                   rows={4}
                   placeholder="Enter commit description..."
                 />
                 <div className="describe-actions">
-                  <button className="describe-btn describe-btn--save" onClick={() => onDescribeSave(commit.changeId, describeText)}>
+                  <button className="describe-btn describe-btn--save" onClick={() => row.actions.onDescribeSave(describeText)}>
                     Save
                   </button>
-                  <button className="describe-btn describe-btn--cancel" onClick={onDescribeCancel}>
+                  <button className="describe-btn describe-btn--cancel" onClick={row.actions.onDescribeCancel}>
                     Cancel
                   </button>
                 </div>
@@ -214,50 +145,46 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, logRefr
           x={contextMenu.x}
           y={contextMenu.y}
           items={[
-            // 커밋 전환
-            ...(!commit.isWorkingCopy ? [{
+            ...(!row.commit.isWorkingCopy ? [{
               label: 'Edit this commit',
-              disabled: commit.isImmutable,
-              onClick: () => onEdit(commit.changeId),
+              disabled: row.commit.isImmutable,
+              onClick: row.actions.onEdit,
             }] : []),
             {
               label: 'New commit on top',
-              onClick: () => onNew(commit.changeId),
+              onClick: row.actions.onNew,
             },
-            // 커밋 수정
             { type: 'separator' as const },
             {
               label: 'Describe',
-              disabled: commit.isImmutable,
-              onClick: () => onDescribeStart(commit.changeId),
+              disabled: row.commit.isImmutable,
+              onClick: row.actions.onDescribeStart,
             },
             {
               label: 'Split',
-              disabled: commit.isImmutable || commit.isEmpty,
-              onClick: () => onSplitStart(commit.changeId),
+              disabled: row.commit.isImmutable || row.commit.isEmpty,
+              onClick: row.actions.onSplitStart,
             },
             {
               label: 'Squash into parent',
-              disabled: commit.isImmutable,
-              onClick: () => onSquashStart(commit.changeId, commit.description, commit.parents[0] ?? ''),
+              disabled: row.commit.isImmutable,
+              onClick: row.actions.onSquashStart,
             },
-            // 이동·재배치
             { type: 'separator' as const },
             {
               label: 'Move changes from here',
-              disabled: commit.isImmutable || commit.isEmpty,
-              onClick: () => onMoveChangesStart(commit.changeId),
+              disabled: row.commit.isImmutable || row.commit.isEmpty,
+              onClick: row.actions.onMoveChangesStart,
             },
             {
               label: 'Rebase this subtree',
-              disabled: commit.isImmutable,
-              onClick: () => onRebaseStart(commit.changeId, commit.description),
+              disabled: row.commit.isImmutable,
+              onClick: row.actions.onRebaseStart,
             },
-            // 북마크
             { type: 'separator' as const },
             {
               label: 'Set bookmark',
-              onClick: () => onSetBookmark(commit.changeId),
+              onClick: row.actions.onSetBookmark,
             },
           ]}
           onClose={() => setContextMenu(null)}
@@ -270,23 +197,23 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, logRefr
           y={bookmarkContextMenu.y}
           items={[
             {
-              label: pushingBookmarks.has(bookmarkContextMenu.bookmark.name) ? 'Pushing...' : 'Push this bookmark',
-              disabled: pushingBookmarks.has(bookmarkContextMenu.bookmark.name),
-              onClick: () => onPushBookmark(bookmarkContextMenu.bookmark.name),
+              label: row.pushingBookmarks.has(bookmarkContextMenu.bookmark.name) ? 'Pushing...' : 'Push this bookmark',
+              disabled: row.pushingBookmarks.has(bookmarkContextMenu.bookmark.name),
+              onClick: () => row.actions.onPushBookmark(bookmarkContextMenu.bookmark.name),
             },
             {
               label: 'Push with descendants',
-              disabled: pushingBookmarks.has(bookmarkContextMenu.bookmark.name),
-              onClick: () => onPushBookmarkSubtree(bookmarkContextMenu.bookmark.name),
+              disabled: row.pushingBookmarks.has(bookmarkContextMenu.bookmark.name),
+              onClick: () => row.actions.onPushBookmarkSubtree(bookmarkContextMenu.bookmark.name),
             },
             { type: 'separator' as const },
             {
               label: 'Rename bookmark',
-              onClick: () => onBookmarkRename(bookmarkContextMenu.bookmark.name),
+              onClick: () => row.actions.onBookmarkRename(bookmarkContextMenu.bookmark.name),
             },
             {
               label: 'Delete bookmark',
-              onClick: () => onBookmarkDelete(bookmarkContextMenu.bookmark.name),
+              onClick: () => row.actions.onBookmarkDelete(bookmarkContextMenu.bookmark.name),
             },
           ]}
           onClose={() => setBookmarkContextMenu(null)}
