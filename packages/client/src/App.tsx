@@ -9,6 +9,7 @@ import FileSelectModal from './components/FileSelectModal'
 import ConfirmModal from './components/ConfirmModal'
 import ErrorBanner from './components/ErrorBanner'
 import { buildChildrenMap, getDescendants } from './utils/graph'
+import { interpretSuccessfulPush } from './utils/pushFeedback'
 import type { GraphRow } from './types'
 import './components/styles.css'
 
@@ -61,15 +62,11 @@ export type PushScope = 'bookmark' | 'subtree'
 interface PushResult {
   type: 'success' | 'error' | 'info'
   message: string
+  reviewUrl?: string | null
 }
 
 function getPushTargetLabel(bookmark: string, scope: PushScope): string {
   return scope === 'subtree' ? `${bookmark} subtree` : bookmark
-}
-
-function isPushUpToDate(output: string): boolean {
-  const normalized = output.toLowerCase()
-  return normalized.includes('nothing changed') || normalized.includes('already up to date')
 }
 
 export default function App() {
@@ -502,10 +499,15 @@ export default function App() {
       }
       const output = data.output || ''
       const targetLabel = getPushTargetLabel(bookmark, scope)
-      if (isPushUpToDate(output)) {
+      const feedback = interpretSuccessfulPush(output)
+      if (feedback.isUpToDate) {
         setPushResult({ type: 'info', message: `${targetLabel}: already up to date` })
       } else {
-        setPushResult({ type: 'success', message: `${targetLabel} pushed to ${remote}` })
+        setPushResult({
+          type: 'success',
+          message: `${targetLabel} pushed to ${remote}`,
+          reviewUrl: scope === 'bookmark' ? feedback.reviewUrl : null,
+        })
       }
       await fetchLog()
     } catch (e) {
@@ -731,7 +733,19 @@ export default function App() {
       )}
       {pushResult && (
         <div className={`push-toast push-toast--${pushResult.type}`}>
-          <span className="push-toast-message">{pushResult.message}</span>
+          <div className="push-toast-body">
+            <span className="push-toast-message">{pushResult.message}</span>
+            {pushResult.type === 'success' && pushResult.reviewUrl && (
+              <a
+                className="push-toast-link"
+                href={pushResult.reviewUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open review link
+              </a>
+            )}
+          </div>
           <button className="push-toast-close" onClick={() => setPushResult(null)}>&times;</button>
         </div>
       )}

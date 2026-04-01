@@ -832,7 +832,7 @@ body {
   top: 20px;
   right: 20px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 10px 16px;
   border-radius: var(--radius);
@@ -863,6 +863,25 @@ body {
   flex: 1;
 }
 
+.push-toast-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.push-toast-link {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.push-toast-link:hover {
+  opacity: 0.85;
+}
+
 .push-toast-close {
   background: none;
   border: none;
@@ -872,6 +891,7 @@ body {
   padding: 0 2px;
   opacity: 0.8;
   line-height: 1;
+  margin-top: 1px;
 }
 
 .push-toast-close:hover {
