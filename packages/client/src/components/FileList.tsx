@@ -6,6 +6,36 @@ interface ChangedFile {
   status: string
 }
 
+const fileListCache = new Map<string, ChangedFile[]>()
+const fileListRequests = new Map<string, Promise<ChangedFile[]>>()
+
+function getCacheKey(cwd: string, changeId: string): string {
+  return `${cwd}::${changeId}`
+}
+
+async function fetchChangedFiles(cwd: string, changeId: string): Promise<ChangedFile[]> {
+  const cacheKey = getCacheKey(cwd, changeId)
+  const existingRequest = fileListRequests.get(cacheKey)
+  if (existingRequest) return existingRequest
+
+  const request = fetch(`/api/show/${changeId}?cwd=${encodeURIComponent(cwd)}`)
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return r.json()
+    })
+    .then((data) => {
+      const files = Array.isArray(data) ? data : []
+      fileListCache.set(cacheKey, files)
+      return files
+    })
+    .finally(() => {
+      fileListRequests.delete(cacheKey)
+    })
+
+  fileListRequests.set(cacheKey, request)
+  return request
+}
+
 interface Props {
   changeId: string
   cwd: string
@@ -21,15 +51,33 @@ export default function FileList({ changeId, cwd, refreshKey, actionsDisabled, o
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: ChangedFile } | null>(null)
 
   useEffect(() => {
-    setLoading(true)
-    fetch(`/api/show/${changeId}?cwd=${encodeURIComponent(cwd)}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
+    const cacheKey = getCacheKey(cwd, changeId)
+    const cachedFiles = fileListCache.get(cacheKey)
+    let cancelled = false
+
+    if (cachedFiles) {
+      setFiles(cachedFiles)
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
+
+    fetchChangedFiles(cwd, changeId)
+      .then((nextFiles) => {
+        if (cancelled) return
+        setFiles(nextFiles)
       })
-      .then((data) => setFiles(Array.isArray(data) ? data : []))
-      .catch(() => setFiles([]))
-      .finally(() => setLoading(false))
+      .catch(() => {
+        if (cancelled || cachedFiles) return
+        setFiles([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [changeId, cwd, refreshKey])
 
   useEffect(() => {
