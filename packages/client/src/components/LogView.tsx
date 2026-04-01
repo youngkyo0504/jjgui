@@ -7,6 +7,7 @@ import type { GraphRow } from '../types'
 interface Props {
   rows: GraphRow[]
   cwd: string
+  logRefreshKey: number
   rebase: RebaseState
   moveChanges: MoveChangesState
   describingChangeId: string | null
@@ -24,13 +25,15 @@ interface Props {
   onSplitStart: (changeId: string) => void
   onSquashStart: (changeId: string, description: string, parentDescription: string) => void
   onMoveChangesStart: (changeId: string) => void
+  onMoveSingleFile: (changeId: string, path: string) => void
+  onDiscardFile: (changeId: string, path: string) => void
   onPushBookmark: (bookmark: string) => void
   onPushBookmarkSubtree: (bookmark: string) => void
   pushingBookmarks: Set<string>
   showRemoteBookmarks: boolean
 }
 
-export default function LogView({ rows, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks, showRemoteBookmarks }: Props) {
+export default function LogView({ rows, cwd, logRefreshKey, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onMoveSingleFile, onDiscardFile, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks, showRemoteBookmarks }: Props) {
   return (
     <div className="log-view">
       {rows.map((row, i) => {
@@ -42,6 +45,7 @@ export default function LogView({ rows, cwd, rebase, moveChanges, describingChan
               laneColors={row.laneColors}
               commit={row.commit}
               cwd={cwd}
+              logRefreshKey={logRefreshKey}
               rebase={rebase}
               moveChanges={moveChanges}
               describingChangeId={describingChangeId}
@@ -59,6 +63,8 @@ export default function LogView({ rows, cwd, rebase, moveChanges, describingChan
               onSplitStart={onSplitStart}
               onSquashStart={onSquashStart}
               onMoveChangesStart={onMoveChangesStart}
+              onMoveSingleFile={onMoveSingleFile}
+              onDiscardFile={onDiscardFile}
               onPushBookmark={onPushBookmark}
               onPushBookmarkSubtree={onPushBookmarkSubtree}
               pushingBookmarks={pushingBookmarks}

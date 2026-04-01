@@ -348,10 +348,17 @@ export async function squashCommit(cwd: string, changeId: string): Promise<strin
   return beforeOpId
 }
 
+/** 특정 파일의 변경만 현재 revision에서 제거한다 */
+export async function discardFileChanges(cwd: string, changeId: string, path: string): Promise<string> {
+  const beforeOpId = await getCurrentOperationId(cwd)
+  await $`jj restore --changes-in ${changeId} --restore-descendants ${path}`.cwd(cwd).quiet()
+  return beforeOpId
+}
+
 /** 변경사항을 다른 커밋으로 이동한다 */
 export async function moveChanges(cwd: string, fromChangeId: string, toChangeId: string, paths: string[]): Promise<string> {
   const beforeOpId = await getCurrentOperationId(cwd)
-  await $`jj squash --from ${fromChangeId} --into ${toChangeId} ${paths}`.cwd(cwd)
+  await $`jj squash --keep-emptied --from ${fromChangeId} --into ${toChangeId} ${paths}`.cwd(cwd)
   return beforeOpId
 }
 

@@ -12,6 +12,7 @@ interface Props {
   laneColors?: string[]
   commit: CommitInfo
   cwd: string
+  logRefreshKey: number
   rebase: RebaseState
   moveChanges: MoveChangesState
   describingChangeId: string | null
@@ -29,13 +30,15 @@ interface Props {
   onSplitStart: (changeId: string) => void
   onSquashStart: (changeId: string, description: string, parentDescription: string) => void
   onMoveChangesStart: (changeId: string) => void
+  onMoveSingleFile: (changeId: string, path: string) => void
+  onDiscardFile: (changeId: string, path: string) => void
   onPushBookmark: (bookmark: string) => void
   onPushBookmarkSubtree: (bookmark: string) => void
   pushingBookmarks: Set<string>
   showRemoteBookmarks: boolean
 }
 
-export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks, showRemoteBookmarks }: Props) {
+export default function CommitRow({ graphChars, laneColors, commit, cwd, logRefreshKey, rebase, moveChanges, describingChangeId, onRebaseStart, onDestinationSelect, onMoveChangesDestinationSelect, onEdit, onNew, onDescribeStart, onDescribeCancel, onDescribeSave, onSetBookmark, onBookmarkDelete, onBookmarkRename, onSplitStart, onSquashStart, onMoveChangesStart, onMoveSingleFile, onDiscardFile, onPushBookmark, onPushBookmarkSubtree, pushingBookmarks, showRemoteBookmarks }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [bookmarkContextMenu, setBookmarkContextMenu] = useState<{ x: number; y: number; bookmark: BookmarkRef } | null>(null)
@@ -68,6 +71,7 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
   const isInSubtree = isSource || isDescendant
   const isRebaseMode = rebase.phase === 'source-selected' || rebase.phase === 'confirming'
   const isMoveChangesMode = moveChanges.phase === 'selecting-destination' || moveChanges.phase === 'confirming'
+  const isInteractionLocked = rebase.phase !== 'idle' || moveChanges.phase !== 'idle'
   const isAnyMoveMode = isRebaseMode || isMoveChangesMode
   const isDisabledTarget = isRebaseMode && isInSubtree
   const isDestination = rebase.destinationChangeId === commit.changeId
@@ -82,19 +86,19 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
       onMoveChangesDestinationSelect(commit.changeId, commit.description)
       return
     }
-    if (!isAnyMoveMode) {
+    if (!isInteractionLocked) {
       setExpanded(!expanded)
     }
   }
 
   const handleContextMenu = (e: React.MouseEvent) => {
-    if (isAnyMoveMode) return
+    if (isInteractionLocked) return
     e.preventDefault()
     setContextMenu({ x: e.clientX, y: e.clientY })
   }
 
   const handleBookmarkContextMenu = (e: React.MouseEvent, bookmark: BookmarkRef) => {
-    if (isAnyMoveMode || bookmark.isRemote) return
+    if (isInteractionLocked || bookmark.isRemote) return
     e.preventDefault()
     e.stopPropagation()
     setBookmarkContextMenu({ x: e.clientX, y: e.clientY, bookmark })
@@ -161,10 +165,17 @@ export default function CommitRow({ graphChars, laneColors, commit, cwd, rebase,
         </div>
       </div>
 
-      {expanded && !isRebaseMode && !isDescribing && (
+      {expanded && !isInteractionLocked && !isDescribing && (
         <div className="graph-row graph-row--file-list">
           <SvgGraphCell graphChars={graphChars} laneColors={laneColors} lineOnly />
-          <FileList changeId={commit.changeId} cwd={cwd} />
+          <FileList
+            changeId={commit.changeId}
+            cwd={cwd}
+            refreshKey={logRefreshKey}
+            actionsDisabled={commit.isImmutable || isInteractionLocked}
+            onDiscardFile={onDiscardFile}
+            onMoveFile={onMoveSingleFile}
+          />
         </div>
       )}
 

@@ -12,6 +12,11 @@ import { buildChildrenMap, getDescendants } from './utils/graph'
 import type { GraphRow } from './types'
 import './components/styles.css'
 
+interface ChangedFile {
+  path: string
+  status: string
+}
+
 export type RebasePhase = 'idle' | 'source-selected' | 'confirming' | 'executing'
 
 export interface RebaseState {
@@ -33,7 +38,7 @@ export interface MoveChangesState {
   selectedPaths?: string[]
   toChangeId?: string
   toDescription?: string
-  lastAction?: 'move-changes' | 'split' | 'squash'
+  lastAction?: 'move-changes' | 'split' | 'squash' | 'discard-file'
   beforeOpId?: string
 }
 
@@ -72,12 +77,13 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [showRemoteBookmarks, setShowRemoteBookmarks] = useState(false)
+  const [logRefreshKey, setLogRefreshKey] = useState(0)
   const [rebase, setRebase] = useState<RebaseState>({ phase: 'idle' })
   const [moveChanges, setMoveChanges] = useState<MoveChangesState>({ phase: 'idle' })
   const [fetchState, setFetchState] = useState<FetchState>({ phase: 'idle' })
   const [describingChangeId, setDescribingChangeId] = useState<string | null>(null)
   const [bookmarkModal, setBookmarkModal] = useState<{ mode: 'set'; changeId: string } | { mode: 'rename'; bookmarkName: string } | null>(null)
-  const [fileSelectModal, setFileSelectModal] = useState<{ type: 'split' | 'move-changes'; changeId: string; files: { path: string; status: string }[] } | null>(null)
+  const [fileSelectModal, setFileSelectModal] = useState<{ type: 'split' | 'move-changes'; changeId: string; files: ChangedFile[] } | null>(null)
   const [squashConfirm, setSquashConfirm] = useState<{ changeId: string; description: string; parentDescription: string } | null>(null)
   const [pushingBookmarks, setPushingBookmarks] = useState<Set<string>>(new Set())
   const [pushResult, setPushResult] = useState<PushResult | null>(null)
@@ -102,6 +108,7 @@ export default function App() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setRows(data)
+      setLogRefreshKey((prev) => prev + 1)
       setError(null)
     } catch (e) {
       setError(String(e))
@@ -216,6 +223,7 @@ export default function App() {
         const data = await res.json()
         throw new Error(data.error || `HTTP ${res.status}`)
       }
+      await fetchLog()
       setDescribingChangeId(null)
     } catch (e) {
       setEditError(String(e))
@@ -266,12 +274,18 @@ export default function App() {
     }
   }, [cwd])
 
-  const handleSplitConfirm = useCallback(async (changeId: string, selectedPaths: string[], allFiles: { path: string; status: string }[]) => {
+  const handleSplitConfirm = useCallback(async (changeId: string, selectedPaths: string[], allFiles: ChangedFile[]) => {
     setFileSelectModal(null)
     try {
       // GUI: 사용자가 "새 커밋으로 빼낼 파일"을 선택 → 선택하지 않은 파일을 jj split paths로 전달
       const remainPaths = allFiles.filter((f) => !selectedPaths.includes(f.path)).map((f) => f.path)
       if (remainPaths.length === 0) { setEditError('At least one file must remain in the original commit'); return }
+      setMoveChanges({
+        phase: 'executing',
+        lastAction: 'split',
+        fromChangeId: changeId,
+        selectedPaths,
+      })
       const res = await fetch(`/api/split?cwd=${encodeURIComponent(cwd)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -283,6 +297,7 @@ export default function App() {
       await fetchLog()
     } catch (e) {
       setEditError(String(e))
+      setMoveChanges({ phase: 'idle' })
     }
   }, [cwd])
 
@@ -294,6 +309,11 @@ export default function App() {
     if (!squashConfirm) return
     setSquashConfirm(null)
     try {
+      setMoveChanges({
+        phase: 'executing',
+        lastAction: 'squash',
+        fromChangeId: squashConfirm.changeId,
+      })
       const res = await fetch(`/api/squash?cwd=${encodeURIComponent(cwd)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -305,6 +325,7 @@ export default function App() {
       await fetchLog()
     } catch (e) {
       setEditError(String(e))
+      setMoveChanges({ phase: 'idle' })
     }
   }, [cwd, squashConfirm])
 
@@ -329,6 +350,46 @@ export default function App() {
     })
   }, [rebase.phase])
 
+  const handleMoveSingleFile = useCallback((changeId: string, path: string) => {
+    if (rebase.phase !== 'idle') return
+    setEditError(null)
+    setMoveChanges({
+      phase: 'selecting-destination',
+      fromChangeId: changeId,
+      selectedPaths: [path],
+    })
+  }, [rebase.phase])
+
+  const handleDiscardFile = useCallback(async (changeId: string, path: string) => {
+    setEditError(null)
+    setMoveChanges({
+      phase: 'executing',
+      lastAction: 'discard-file',
+      fromChangeId: changeId,
+      selectedPaths: [path],
+    })
+    try {
+      const res = await fetch(`/api/discard-file?cwd=${encodeURIComponent(cwd)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changeId, path }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      setMoveChanges({
+        phase: 'idle',
+        lastAction: 'discard-file',
+        fromChangeId: changeId,
+        selectedPaths: [path],
+        beforeOpId: data.beforeOpId,
+      })
+      await fetchLog()
+    } catch (e) {
+      setEditError(String(e))
+      setMoveChanges({ phase: 'idle' })
+    }
+  }, [cwd])
+
   const handleMoveChangesDestinationSelect = useCallback((changeId: string, description: string) => {
     setMoveChanges((prev) => ({
       ...prev,
@@ -344,7 +405,7 @@ export default function App() {
 
   const handleMoveChangesConfirm = useCallback(async () => {
     if (!moveChanges.fromChangeId || !moveChanges.toChangeId || !moveChanges.selectedPaths) return
-    setMoveChanges((prev) => ({ ...prev, phase: 'executing' }))
+    setMoveChanges((prev) => ({ ...prev, phase: 'executing', lastAction: 'move-changes' }))
     try {
       const res = await fetch(`/api/move-changes?cwd=${encodeURIComponent(cwd)}`, {
         method: 'POST',
@@ -574,6 +635,7 @@ export default function App() {
       <LogView
         rows={rows}
         cwd={cwd}
+        logRefreshKey={logRefreshKey}
         rebase={rebase}
         moveChanges={moveChanges}
         describingChangeId={describingChangeId}
@@ -591,6 +653,8 @@ export default function App() {
         onSplitStart={handleSplitStart}
         onSquashStart={handleSquashStart}
         onMoveChangesStart={handleMoveChangesStart}
+        onMoveSingleFile={handleMoveSingleFile}
+        onDiscardFile={handleDiscardFile}
         onPushBookmark={handlePushBookmark}
         onPushBookmarkSubtree={handlePushBookmarkSubtree}
         pushingBookmarks={pushingBookmarks}

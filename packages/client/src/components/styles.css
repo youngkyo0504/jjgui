@@ -308,8 +308,14 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 3px 0;
+  padding: 3px 6px;
   font-size: 12px;
+  border-radius: var(--radius);
+  cursor: context-menu;
+}
+
+.file-list-item:hover {
+  background: var(--bg-hover);
 }
 
 .file-status {
@@ -325,6 +331,7 @@ body {
 
 .file-path {
   color: var(--fg-muted);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
