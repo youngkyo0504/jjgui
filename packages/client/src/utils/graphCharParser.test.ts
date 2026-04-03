@@ -48,11 +48,20 @@ describe('parseGraphChars', () => {
   })
 
   test('복합 패턴 (├─╯) → tee + horizontal + merge-up', () => {
-    const result = parseGraphChars('├─╯', ['#7aa2f7', '#7aa2f7', '#9ece6a'])
+    const result = parseGraphChars('├─╯', ['#7aa2f7', '#e0af68', '#9ece6a'])
     expect(result).toEqual([
-      { type: 'tee-right', color: '#7aa2f7' },
-      { type: 'horizontal', color: '#7aa2f7' },
+      { type: 'tee-right', color: '#7aa2f7', horizontalColor: '#9ece6a' },
+      { type: 'horizontal', color: '#9ece6a' },
       { type: 'merge-up', color: '#9ece6a' },
+    ])
+  })
+
+  test('복합 패턴 (╰─┤) → horizontal 색이 왼쪽 branch 색을 따른다', () => {
+    const result = parseGraphChars('╰─┤', ['#9ece6a', '#e0af68', '#7aa2f7'])
+    expect(result).toEqual([
+      { type: 'branch-down', color: '#9ece6a' },
+      { type: 'horizontal', color: '#9ece6a' },
+      { type: 'tee-left', color: '#7aa2f7', horizontalColor: '#9ece6a' },
     ])
   })
 

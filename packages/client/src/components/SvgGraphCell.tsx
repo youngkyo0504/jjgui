@@ -61,7 +61,14 @@ function renderCell(cell: GraphCell, index: number, h: number): React.ReactNode 
       return (
         <g key={index}>
           <line x1={cx} y1={0} x2={cx} y2={h} stroke={color} strokeWidth={STROKE_WIDTH} />
-          <line x1={cx} y1={cy} x2={(index + 1) * LANE_WIDTH} y2={cy} stroke={color} strokeWidth={STROKE_WIDTH} />
+          <line
+            x1={cx}
+            y1={cy}
+            x2={(index + 1) * LANE_WIDTH}
+            y2={cy}
+            stroke={defaultColor(cell.horizontalColor ?? cell.color)}
+            strokeWidth={STROKE_WIDTH}
+          />
         </g>
       )
 
@@ -70,7 +77,14 @@ function renderCell(cell: GraphCell, index: number, h: number): React.ReactNode 
       return (
         <g key={index}>
           <line x1={cx} y1={0} x2={cx} y2={h} stroke={color} strokeWidth={STROKE_WIDTH} />
-          <line x1={index * LANE_WIDTH} y1={cy} x2={cx} y2={cy} stroke={color} strokeWidth={STROKE_WIDTH} />
+          <line
+            x1={index * LANE_WIDTH}
+            y1={cy}
+            x2={cx}
+            y2={cy}
+            stroke={defaultColor(cell.horizontalColor ?? cell.color)}
+            strokeWidth={STROKE_WIDTH}
+          />
         </g>
       )
 

@@ -10,6 +10,7 @@ export interface GraphCell {
   type: CellType
   color: string
   nodeType?: NodeType
+  horizontalColor?: string
 }
 
 const NODE_CHARS = new Set(['○', '@', '◆', '◉'])
@@ -23,6 +24,41 @@ function getNodeType(ch: string): NodeType {
   if (ch === '◆') return 'immutable'
   if (ch === '◉') return 'elided'
   return 'normal'
+}
+
+function findNearestColoredEndpoint(cells: GraphCell[], start: number, step: -1 | 1): GraphCell | null {
+  for (let i = start + step; i >= 0 && i < cells.length; i += step) {
+    const cell = cells[i]
+    if (cell.type === 'empty' || cell.type === 'horizontal') continue
+    if (cell.color) return cell
+  }
+  return null
+}
+
+function resolveHorizontalColor(cells: GraphCell[], index: number): string {
+  const left = findNearestColoredEndpoint(cells, index, -1)
+  const right = findNearestColoredEndpoint(cells, index, 1)
+
+  if (left?.type === 'tee-right' && right?.color) return right.color
+  if (right?.type === 'tee-left' && left?.color) return left.color
+
+  if (right?.color && ['merge-up', 'curve-left', 'node'].includes(right.type)) {
+    return right.color
+  }
+  if (left?.color && ['branch-down', 'curve-right', 'node'].includes(left.type)) {
+    return left.color
+  }
+
+  return right?.color || left?.color || cells[index]?.color || ''
+}
+
+function resolveBranchArmColor(cells: GraphCell[], index: number, step: -1 | 1): string {
+  const neighbor = cells[index + step]
+  if (neighbor?.type === 'horizontal') {
+    return resolveHorizontalColor(cells, index + step)
+  }
+
+  return findNearestColoredEndpoint(cells, index, step)?.color || cells[index]?.color || ''
 }
 
 export function parseGraphChars(graphChars: string, laneColors: string[] = []): GraphCell[] {
@@ -65,5 +101,22 @@ export function parseGraphChars(graphChars: string, laneColors: string[] = []): 
     }
   }
 
-  return cells
+  return cells.map((cell, index) => {
+    if (cell.type === 'horizontal') {
+      const color = resolveHorizontalColor(cells, index)
+      return color && color !== cell.color ? { ...cell, color } : cell
+    }
+
+    if (cell.type === 'tee-right') {
+      const horizontalColor = resolveBranchArmColor(cells, index, 1)
+      return horizontalColor && horizontalColor !== cell.color ? { ...cell, horizontalColor } : cell
+    }
+
+    if (cell.type === 'tee-left') {
+      const horizontalColor = resolveBranchArmColor(cells, index, -1)
+      return horizontalColor && horizontalColor !== cell.color ? { ...cell, horizontalColor } : cell
+    }
+
+    return cell
+  })
 }
