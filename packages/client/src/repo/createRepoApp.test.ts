@@ -50,6 +50,7 @@ function createFakeEvents() {
 function createFakeApi(overrides: Partial<RepoApiPort> = {}): RepoApiPort {
   return {
     loadLog: async () => [],
+    loadOperations: async () => [],
     loadDescription: async () => '',
     loadChangedFiles: async () => [],
     loadBookmarks: async () => [],
@@ -57,16 +58,16 @@ function createFakeApi(overrides: Partial<RepoApiPort> = {}): RepoApiPort {
     edit: async () => undefined,
     createChild: async () => undefined,
     describe: async () => undefined,
-    rebase: async () => ({ beforeOpId: 'rebase-op' }),
+    rebase: async () => ({ beforeOpId: 'rebase-op', afterOpId: 'rebase-after' }),
     undo: async () => undefined,
-    split: async () => ({ beforeOpId: 'split-op' }),
-    squash: async () => ({ beforeOpId: 'squash-op' }),
-    discardFile: async () => ({ beforeOpId: 'discard-op' }),
-    moveChanges: async () => ({ beforeOpId: 'move-op' }),
+    split: async () => ({ beforeOpId: 'split-op', afterOpId: 'split-after' }),
+    squash: async () => ({ beforeOpId: 'squash-op', afterOpId: 'squash-after' }),
+    discardFile: async () => ({ beforeOpId: 'discard-op', afterOpId: 'discard-after' }),
+    moveChanges: async () => ({ beforeOpId: 'move-op', afterOpId: 'move-after' }),
     bookmarkRename: async () => undefined,
     bookmarkDelete: async () => undefined,
     bookmarkSet: async () => ({ kind: 'success' }),
-    fetchAll: async () => ({ beforeOpId: null, results: [] }),
+    fetchAll: async () => ({ beforeOpId: null, afterOpId: null, results: [] }),
     push: async () => ({ output: '' }),
     ...overrides,
   }
@@ -137,7 +138,7 @@ test('split validation stays at the boundary and prevents empty original commits
       loadChangedFiles: async () => files,
       split: async () => {
         splitCalls++
-        return { beforeOpId: 'split-op' }
+        return { beforeOpId: 'split-op', afterOpId: 'split-after' }
       },
     }),
     events: createFakeEvents().events,
@@ -240,7 +241,7 @@ test('fetch undo restores the recorded operation id', async () => {
   const fetchResults: FetchRemoteResult[] = [{ remote: 'origin', ok: true, output: 'done' }]
   const session = createRepoApp({
     api: createFakeApi({
-      fetchAll: async () => ({ beforeOpId: 'fetch-op', results: fetchResults }),
+      fetchAll: async () => ({ beforeOpId: 'fetch-op', afterOpId: 'fetch-after', results: fetchResults }),
       undo: async (_cwd, operationId) => {
         undoCalls.push(operationId)
       },
@@ -249,7 +250,6 @@ test('fetch undo restores the recorded operation id', async () => {
   }).createSession('/repo')
 
   await session.commands.fetchAll()
-  expect(session.getSnapshot().fetchState.beforeOpId).toBe('fetch-op')
   expect(session.getSnapshot().fetchState.results).toEqual(fetchResults)
 
   await session.commands.undo('fetch')

@@ -6,6 +6,9 @@ import type {
   ChangedFile,
   FetchState,
   MoveChangesState,
+  OperationLogEntry,
+  OperationKind,
+  RecentOperation,
   PushResult,
   PushScope,
   RebaseState,
@@ -26,6 +29,11 @@ type FileResource = {
 type BookmarkListResource = {
   status: 'idle' | 'loading' | 'ready'
   bookmarks: string[]
+}
+
+type OperationLogResource = {
+  status: 'idle' | 'loading' | 'ready'
+  items: OperationLogEntry[]
 }
 
 export type RepoDialog =
@@ -51,10 +59,13 @@ export interface RepoSnapshot {
   expandedChangeIds: ReadonlySet<string>
   pushingBookmarks: ReadonlySet<string>
   pushResult: PushResult | null
+  operationDrawerOpen: boolean
+  recentOperations: RecentOperation[]
   resources: {
     descriptions: Record<string, DescriptionResource>
     files: Record<string, FileResource>
     bookmarks: BookmarkListResource
+    operations: OperationLogResource
   }
 }
 
@@ -62,9 +73,10 @@ export interface RepoCommands {
   initialize(): Promise<void>
   refresh(): Promise<void>
   toggleRemoteBookmarks(): void
+  openOperationDrawer(): void
+  closeOperationDrawer(): void
   closeErrorBanner(): void
   dismissDialog(): void
-  dismissFetchBanner(): void
   dismissPushToast(): void
   cancelInteraction(): void
   handleRowClick(changeId: string, description: string): void
@@ -92,6 +104,7 @@ export interface RepoCommands {
   cancelMoveChanges(): void
   confirmMoveChanges(): Promise<void>
   undo(kind: UndoKind): Promise<void>
+  restoreOperation(operationId: string): Promise<void>
   fetchAll(): Promise<void>
   startPushBookmark(bookmark: string): Promise<void>
   startPushBookmarkSubtree(bookmark: string): void
@@ -137,12 +150,18 @@ function initialSnapshot(cwd: string): RepoSnapshot {
     expandedChangeIds: new Set<string>(),
     pushingBookmarks: new Set<string>(),
     pushResult: null,
+    operationDrawerOpen: false,
+    recentOperations: [],
     resources: {
       descriptions: {},
       files: {},
       bookmarks: {
         status: 'idle',
         bookmarks: [],
+      },
+      operations: {
+        status: 'idle',
+        items: [],
       },
     },
   }
@@ -163,9 +182,10 @@ class RepoSessionImpl implements RepoSession {
     initialize: () => this.initialize(),
     refresh: () => this.refresh(),
     toggleRemoteBookmarks: () => this.toggleRemoteBookmarks(),
+    openOperationDrawer: () => this.openOperationDrawer(),
+    closeOperationDrawer: () => this.closeOperationDrawer(),
     closeErrorBanner: () => this.closeErrorBanner(),
     dismissDialog: () => this.dismissDialog(),
-    dismissFetchBanner: () => this.dismissFetchBanner(),
     dismissPushToast: () => this.dismissPushToast(),
     cancelInteraction: () => this.cancelInteraction(),
     handleRowClick: (changeId, description) => this.handleRowClick(changeId, description),
@@ -193,6 +213,7 @@ class RepoSessionImpl implements RepoSession {
     cancelMoveChanges: () => this.cancelMoveChanges(),
     confirmMoveChanges: () => this.confirmMoveChanges(),
     undo: (kind) => this.undo(kind),
+    restoreOperation: (operationId) => this.restoreOperation(operationId),
     fetchAll: () => this.fetchAll(),
     startPushBookmark: (bookmark) => this.startPushBookmark(bookmark),
     startPushBookmarkSubtree: (bookmark) => this.startPushBookmarkSubtree(bookmark),
@@ -246,12 +267,17 @@ class RepoSessionImpl implements RepoSession {
     this.setState((state) => ({ ...state, dialog: null }))
   }
 
-  private dismissFetchBanner(): void {
-    this.setState((state) => ({ ...state, fetchState: idleFetchState() }))
-  }
-
   private dismissPushToast(): void {
     this.setState((state) => ({ ...state, pushResult: null }))
+  }
+
+  private openOperationDrawer(): void {
+    this.setState((state) => ({ ...state, operationDrawerOpen: true }))
+    void this.loadOperations()
+  }
+
+  private closeOperationDrawer(): void {
+    this.setState((state) => ({ ...state, operationDrawerOpen: false }))
   }
 
   private cancelInteraction(): void {
@@ -268,6 +294,112 @@ class RepoSessionImpl implements RepoSession {
       ...state,
       showRemoteBookmarks: !state.showRemoteBookmarks,
     }))
+  }
+
+  private updateOperationsResource(resource: OperationLogResource): void {
+    this.setState((state) => ({
+      ...state,
+      resources: {
+        ...state.resources,
+        operations: resource,
+      },
+    }))
+  }
+
+  private trimRecentOperations(items: RecentOperation[]): RecentOperation[] {
+    return items.slice(0, 12)
+  }
+
+  private createOperationKey(): string {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  }
+
+  private startRecentOperation(
+    kind: OperationKind,
+    title: string,
+    summary: string,
+    details?: string,
+  ): string {
+    const key = this.createOperationKey()
+    const operation: RecentOperation = {
+      key,
+      kind,
+      title,
+      summary,
+      details,
+      status: 'running',
+      timestamp: new Date().toISOString(),
+    }
+
+    this.setState((state) => ({
+      ...state,
+      recentOperations: this.trimRecentOperations([operation, ...state.recentOperations]),
+    }))
+
+    return key
+  }
+
+  private finishRecentOperation(
+    key: string,
+    status: 'success' | 'failed',
+    updates: Partial<RecentOperation> = {},
+  ): void {
+    this.setState((state) => ({
+      ...state,
+      recentOperations: this.trimRecentOperations(state.recentOperations.map((operation) => (
+        operation.key === key
+          ? {
+              ...operation,
+              ...updates,
+              status,
+              timestamp: updates.timestamp ?? new Date().toISOString(),
+            }
+          : operation
+      ))),
+    }))
+  }
+
+  private findLatestOperation(kind: UndoKind): RecentOperation | null {
+    const targetKind = kind === 'rebase' ? 'rebase' : kind === 'moveChanges' ? null : 'fetch'
+    if (kind === 'moveChanges') {
+      return this.state.recentOperations.find((operation) => (
+        operation.status === 'success'
+        && ['move-changes', 'split', 'squash', 'discard-file'].includes(operation.kind)
+        && !!operation.beforeOpId
+      )) ?? null
+    }
+
+    if (!targetKind) return null
+
+    return this.state.recentOperations.find((operation) => (
+      operation.status === 'success'
+      && operation.kind === targetKind
+      && !!operation.beforeOpId
+    )) ?? null
+  }
+
+  private async loadOperations(): Promise<void> {
+    this.updateOperationsResource({
+      status: 'loading',
+      items: this.state.resources.operations.items,
+    })
+
+    try {
+      const items = await this.api.loadOperations(this.cwd)
+      if (this.disposed) return
+
+      this.updateOperationsResource({
+        status: 'ready',
+        items,
+      })
+    } catch {
+      if (this.disposed) return
+
+      this.updateOperationsResource({
+        status: 'ready',
+        items: this.state.resources.operations.items,
+      })
+    }
   }
 
   private async initialize(): Promise<void> {
@@ -329,6 +461,8 @@ class RepoSessionImpl implements RepoSession {
           },
         },
       }))
+
+      void this.loadOperations()
 
       for (const changeId of expandedChangeIds) {
         void this.loadChangedFiles(changeId, { silent: true })
@@ -753,9 +887,14 @@ class RepoSessionImpl implements RepoSession {
           selectedPaths,
         },
       }))
+      const operationKey = this.startRecentOperation(
+        'split',
+        'Splitting commit',
+        `${dialog.changeId} (${selectedPaths.length} selected)`,
+      )
 
       try {
-        const { beforeOpId } = await this.api.split(this.cwd, {
+        const result = await this.api.split(this.cwd, {
           changeId: dialog.changeId,
           paths: remainPaths,
         })
@@ -765,15 +904,22 @@ class RepoSessionImpl implements RepoSession {
           moveChanges: {
             phase: 'idle',
             lastAction: 'split',
-            beforeOpId,
           },
         }))
+        this.finishRecentOperation(operationKey, 'success', {
+          summary: `${dialog.changeId} split into ${selectedPaths.length + 1} parts`,
+          beforeOpId: result.beforeOpId,
+          afterOpId: result.afterOpId,
+        })
         await this.refresh()
       } catch (error) {
         this.setState((state) => ({
           ...state,
           moveChanges: idleMoveChangesState(),
         }))
+        this.finishRecentOperation(operationKey, 'failed', {
+          details: String(error),
+        })
         this.setErrorBanner(String(error))
       }
 
@@ -830,9 +976,14 @@ class RepoSessionImpl implements RepoSession {
         selectedPaths: [path],
       },
     }))
+    const operationKey = this.startRecentOperation(
+      'discard-file',
+      'Discarding file changes',
+      `${path} from ${changeId}`,
+    )
 
     try {
-      const { beforeOpId } = await this.api.discardFile(this.cwd, { changeId, path })
+      const result = await this.api.discardFile(this.cwd, { changeId, path })
       this.setState((state) => ({
         ...state,
         moveChanges: {
@@ -840,15 +991,21 @@ class RepoSessionImpl implements RepoSession {
           lastAction: 'discard-file',
           fromChangeId: changeId,
           selectedPaths: [path],
-          beforeOpId,
         },
       }))
+      this.finishRecentOperation(operationKey, 'success', {
+        beforeOpId: result.beforeOpId,
+        afterOpId: result.afterOpId,
+      })
       await this.refresh()
     } catch (error) {
       this.setState((state) => ({
         ...state,
         moveChanges: idleMoveChangesState(),
       }))
+      this.finishRecentOperation(operationKey, 'failed', {
+        details: String(error),
+      })
       this.setErrorBanner(String(error))
     }
   }
@@ -902,9 +1059,14 @@ class RepoSessionImpl implements RepoSession {
         phase: 'executing',
       },
     }))
+    const operationKey = this.startRecentOperation(
+      'rebase',
+      'Rebasing subtree',
+      `${sourceChangeId} -> ${destinationChangeId}`,
+    )
 
     try {
-      const { beforeOpId } = await this.api.rebase(this.cwd, {
+      const result = await this.api.rebase(this.cwd, {
         sourceChangeId,
         destinationChangeId,
         mode: 'source',
@@ -914,9 +1076,13 @@ class RepoSessionImpl implements RepoSession {
         rebase: {
           phase: 'idle',
           lastAction: 'rebase',
-          beforeOpId,
         },
       }))
+      this.finishRecentOperation(operationKey, 'success', {
+        summary: `${sourceChangeId} -> ${destinationChangeId}`,
+        beforeOpId: result.beforeOpId,
+        afterOpId: result.afterOpId,
+      })
       await this.refresh()
     } catch (error) {
       this.setState((state) => ({
@@ -924,6 +1090,9 @@ class RepoSessionImpl implements RepoSession {
         appError: String(error),
         rebase: idleRebaseState(),
       }))
+      this.finishRecentOperation(operationKey, 'failed', {
+        details: String(error),
+      })
     }
   }
 
@@ -960,9 +1129,14 @@ class RepoSessionImpl implements RepoSession {
         lastAction: 'move-changes',
       },
     }))
+    const operationKey = this.startRecentOperation(
+      'move-changes',
+      'Moving changes',
+      `${fromChangeId} -> ${toChangeId} (${selectedPaths.length} files)`,
+    )
 
     try {
-      const { beforeOpId } = await this.api.moveChanges(this.cwd, {
+      const result = await this.api.moveChanges(this.cwd, {
         fromChangeId,
         toChangeId,
         paths: selectedPaths,
@@ -972,49 +1146,32 @@ class RepoSessionImpl implements RepoSession {
         moveChanges: {
           phase: 'idle',
           lastAction: 'move-changes',
-          beforeOpId,
         },
       }))
+      this.finishRecentOperation(operationKey, 'success', {
+        beforeOpId: result.beforeOpId,
+        afterOpId: result.afterOpId,
+      })
       await this.refresh()
     } catch (error) {
       this.setState((state) => ({
         ...state,
         moveChanges: idleMoveChangesState(),
       }))
+      this.finishRecentOperation(operationKey, 'failed', {
+        details: String(error),
+      })
       this.setErrorBanner(String(error))
     }
   }
 
   private async undo(kind: UndoKind): Promise<void> {
-    const operationId = kind === 'rebase'
-      ? this.state.rebase.beforeOpId
-      : kind === 'moveChanges'
-        ? this.state.moveChanges.beforeOpId
-        : this.state.fetchState.beforeOpId ?? undefined
+    const operationId = this.findLatestOperation(kind)?.beforeOpId ?? undefined
 
     if (!operationId) return
 
     try {
-      await this.api.undo(this.cwd, operationId)
-
-      if (kind === 'rebase') {
-        this.setState((state) => ({
-          ...state,
-          rebase: idleRebaseState(),
-        }))
-      } else if (kind === 'moveChanges') {
-        this.setState((state) => ({
-          ...state,
-          moveChanges: idleMoveChangesState(),
-        }))
-      } else {
-        this.setState((state) => ({
-          ...state,
-          fetchState: idleFetchState(),
-        }))
-      }
-
-      await this.refresh()
+      await this.restoreOperation(operationId)
     } catch (error) {
       if (kind === 'fetch') {
         this.setErrorBanner(String(error))
@@ -1027,11 +1184,43 @@ class RepoSessionImpl implements RepoSession {
     }
   }
 
+  private async restoreOperation(operationId: string): Promise<void> {
+    const matchedOperation = this.state.recentOperations.find((operation) => operation.beforeOpId === operationId)
+    const operationKey = this.startRecentOperation(
+      'restore',
+      'Restoring operation',
+      matchedOperation?.summary ?? operationId,
+    )
+    this.setErrorBanner(null)
+
+    try {
+      await this.api.undo(this.cwd, operationId)
+      this.setState((state) => ({
+        ...state,
+        rebase: idleRebaseState(),
+        moveChanges: idleMoveChangesState(),
+        fetchState: idleFetchState(),
+      }))
+      this.finishRecentOperation(operationKey, 'success')
+      await this.refresh()
+    } catch (error) {
+      this.finishRecentOperation(operationKey, 'failed', {
+        details: String(error),
+      })
+      this.setErrorBanner(String(error))
+    }
+  }
+
   private async fetchAll(): Promise<void> {
     this.setState((state) => ({
       ...state,
       fetchState: { phase: 'executing' },
     }))
+    const operationKey = this.startRecentOperation(
+      'fetch',
+      'Fetching remotes',
+      'All remotes',
+    )
 
     try {
       const result = await this.api.fetchAll(this.cwd)
@@ -1043,6 +1232,18 @@ class RepoSessionImpl implements RepoSession {
           beforeOpId: result.beforeOpId,
         },
       }))
+      const successCount = result.results.filter((item) => item.ok).length
+      const failureCount = result.results.length - successCount
+      this.finishRecentOperation(operationKey, failureCount === 0 ? 'success' : 'failed', {
+        summary: result.results.length === 0
+          ? 'No remotes configured'
+          : `${successCount} succeeded, ${failureCount} failed`,
+        details: result.results.map((item) => (
+          `${item.ok ? 'OK' : 'FAIL'} ${item.remote}${item.output ? `\n${item.output}` : ''}`
+        )).join('\n\n'),
+        beforeOpId: result.beforeOpId,
+        afterOpId: result.afterOpId,
+      })
       await this.refresh()
     } catch (error) {
       this.setState((state) => ({
@@ -1053,6 +1254,10 @@ class RepoSessionImpl implements RepoSession {
           beforeOpId: null,
         },
       }))
+      this.finishRecentOperation(operationKey, 'failed', {
+        summary: 'Fetch failed',
+        details: String(error),
+      })
     }
   }
 
@@ -1158,23 +1363,34 @@ class RepoSessionImpl implements RepoSession {
           fromChangeId: dialog.changeId,
         },
       }))
+      const operationKey = this.startRecentOperation(
+        'squash',
+        'Squashing commit',
+        `${dialog.changeId} into parent`,
+      )
 
       try {
-        const { beforeOpId } = await this.api.squash(this.cwd, dialog.changeId)
+        const result = await this.api.squash(this.cwd, dialog.changeId)
         this.setState((state) => ({
           ...state,
           moveChanges: {
             phase: 'idle',
             lastAction: 'squash',
-            beforeOpId,
           },
         }))
+        this.finishRecentOperation(operationKey, 'success', {
+          beforeOpId: result.beforeOpId,
+          afterOpId: result.afterOpId,
+        })
         await this.refresh()
       } catch (error) {
         this.setState((state) => ({
           ...state,
           moveChanges: idleMoveChangesState(),
         }))
+        this.finishRecentOperation(operationKey, 'failed', {
+          details: String(error),
+        })
         this.setErrorBanner(String(error))
       }
       return

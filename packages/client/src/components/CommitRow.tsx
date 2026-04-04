@@ -97,6 +97,36 @@ export default function CommitRow({ row }: Props) {
         </div>
       </div>
 
+      {row.inlinePanel && (
+        <div className="graph-row graph-row--file-list">
+          <SvgGraphCell graphChars={row.graphChars} laneColors={row.laneColors} lineOnly />
+          <div className={`inline-action-panel inline-action-panel--${row.inlinePanel.tone}`}>
+            <div className="inline-action-panel-title">{row.inlinePanel.title}</div>
+            {row.inlinePanel.details.length > 0 && (
+              <div className="inline-action-panel-details">
+                {row.inlinePanel.details.map((detail) => (
+                  <div key={detail}>{detail}</div>
+                ))}
+              </div>
+            )}
+            {(row.inlinePanel.onCancel || row.inlinePanel.onConfirm) && (
+              <div className="inline-action-panel-actions">
+                {row.inlinePanel.onCancel && (
+                  <button className="describe-btn describe-btn--cancel" onClick={row.inlinePanel.onCancel}>
+                    Cancel
+                  </button>
+                )}
+                {row.inlinePanel.onConfirm && row.inlinePanel.confirmLabel && (
+                  <button className="describe-btn describe-btn--save" onClick={row.inlinePanel.onConfirm}>
+                    {row.inlinePanel.confirmLabel}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {row.isExpanded && !row.state.isInteractionLocked && !row.isDescribing && (
         <div className="graph-row graph-row--file-list">
           <SvgGraphCell graphChars={row.graphChars} laneColors={row.laneColors} lineOnly />

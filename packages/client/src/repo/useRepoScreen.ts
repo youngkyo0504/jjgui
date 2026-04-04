@@ -1,10 +1,25 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { BookmarkRef, CommitInfo } from '../types'
+import { formatRelativeTime } from '../utils/format'
 import { createRepoApp } from './createRepoApp'
 import { createEventSourceRepoEvents } from './eventSourceRepoEvents'
 import { createHttpRepoApi } from './httpRepoApi'
 import type { RepoCommands, RepoDialog, RepoSnapshot } from './createRepoApp'
-import type { ChangedFile, FetchState, MoveChangesState, PushResult, RebaseState } from './types'
+import type {
+  ChangedFile,
+  OperationKind,
+  OperationStatus,
+  PushResult,
+} from './types'
+
+export interface InlineActionPanelViewModel {
+  tone: 'confirm' | 'running'
+  title: string
+  details: string[]
+  confirmLabel?: string
+  onConfirm?(): void
+  onCancel?(): void
+}
 
 export interface CommitRowViewModel {
   key: string
@@ -20,6 +35,7 @@ export interface CommitRowViewModel {
   files: ChangedFile[]
   filesLoading: boolean
   actionsDisabled: boolean
+  inlinePanel: InlineActionPanelViewModel | null
   state: {
     isSource: boolean
     isDescendant: boolean
@@ -56,6 +72,18 @@ export type LogRowView =
   | { type: 'edge'; key: string; graphChars: string; laneColors?: string[] }
   | { type: 'elided'; key: string; graphChars: string; laneColors?: string[] }
 
+export interface OperationItemViewModel {
+  key: string
+  status: OperationStatus
+  title: string
+  summary: string
+  timestamp: string
+  relativeTime: string
+  details?: string
+  restoreOperationId?: string | null
+  onRestore?(): void
+}
+
 export interface RepoScreenModel {
   appError: string | null
   toolbar: {
@@ -66,11 +94,19 @@ export interface RepoScreenModel {
     fetchDisabled: boolean
     onToggleRemoteBookmarks(): void
     onFetch(): void
+    operationsChip: {
+      label: string
+      status: 'idle' | 'running' | 'success' | 'failed'
+      onClick(): void
+    }
   }
   errorBanner: { message: string; onClose(): void } | null
-  fetchBanner: { fetchState: FetchState; onUndo(): void; onDismiss(): void }
-  rebaseBanner: { rebase: RebaseState; onCancel(): void; onConfirm(): void; onUndo(): void }
-  moveChangesBanner: { moveChanges: MoveChangesState; onCancel(): void; onConfirm(): void; onUndo(): void }
+  operationsDrawer: {
+    isOpen: boolean
+    items: OperationItemViewModel[]
+    loading: boolean
+    onClose(): void
+  }
   logRows: LogRowView[]
   bookmarkModal:
     | { kind: 'rename'; initialName: string; onSubmit(name: string): void; onCancel(): void }
@@ -92,13 +128,47 @@ function getPushTargetLabel(bookmark: string, scope: 'bookmark' | 'subtree'): st
   return scope === 'subtree' ? `${bookmark} subtree` : bookmark
 }
 
+function getOperationVerb(kind: OperationKind): string {
+  switch (kind) {
+    case 'rebase':
+      return 'Rebasing...'
+    case 'move-changes':
+      return 'Moving...'
+    case 'split':
+      return 'Splitting...'
+    case 'squash':
+      return 'Squashing...'
+    case 'discard-file':
+      return 'Discarding...'
+    case 'fetch':
+      return 'Fetching...'
+    case 'restore':
+      return 'Restoring...'
+    default:
+      return 'Running...'
+  }
+}
+
+function getMoveChangesExecutingTitle(snapshot: RepoSnapshot): string {
+  switch (snapshot.moveChanges.lastAction) {
+    case 'discard-file':
+      return 'Discarding file changes...'
+    case 'split':
+      return 'Splitting commit...'
+    case 'squash':
+      return 'Squashing commit...'
+    default:
+      return 'Moving changes...'
+  }
+}
+
 function buildConfirmModal(dialog: RepoDialog | null, commands: RepoCommands): RepoScreenModel['confirmModal'] {
   if (!dialog || dialog.kind !== 'confirm') return null
 
   if (dialog.confirmKind === 'squash') {
     return {
       title: 'Squash into parent',
-      message: `"${dialog.description || '(no description)'}" → parent "${dialog.parentDescription || '(no description)'}"`,
+      message: `"${dialog.description || '(no description)'}" -> parent "${dialog.parentDescription || '(no description)'}"`,
       confirmLabel: 'Squash',
       onConfirm: () => { void commands.confirmDialog() },
       onCancel: commands.dismissDialog,
@@ -174,6 +244,78 @@ function buildFileSelectModal(snapshot: RepoSnapshot, commands: RepoCommands): R
   }
 }
 
+function buildInlinePanel(
+  snapshot: RepoSnapshot,
+  commit: CommitInfo,
+  commands: RepoCommands,
+): InlineActionPanelViewModel | null {
+  if (snapshot.rebase.destinationChangeId === commit.changeId) {
+    const commitCount = (snapshot.rebase.descendants?.size ?? 0) + 1
+    const details = [
+      `source: ${snapshot.rebase.sourceChangeId}${snapshot.rebase.sourceDescription ? ` "${snapshot.rebase.sourceDescription}"` : ''}`,
+      `destination: ${snapshot.rebase.destinationChangeId}${snapshot.rebase.destinationDescription ? ` "${snapshot.rebase.destinationDescription}"` : ''}`,
+    ]
+
+    if (snapshot.rebase.phase === 'confirming') {
+      return {
+        tone: 'confirm',
+        title: `Rebase ${commitCount} commit${commitCount === 1 ? '' : 's'} onto ${snapshot.rebase.destinationChangeId}`,
+        details,
+        confirmLabel: 'Rebase',
+        onConfirm: () => { void commands.confirmRebase() },
+        onCancel: commands.cancelRebase,
+      }
+    }
+
+    if (snapshot.rebase.phase === 'executing') {
+      return {
+        tone: 'running',
+        title: `Rebasing ${commitCount} commit${commitCount === 1 ? '' : 's'}...`,
+        details,
+      }
+    }
+  }
+
+  if (snapshot.moveChanges.toChangeId === commit.changeId) {
+    const fileCount = snapshot.moveChanges.selectedPaths?.length ?? 0
+    const details = [
+      `from: ${snapshot.moveChanges.fromChangeId ?? '-'}`,
+      `destination: ${snapshot.moveChanges.toChangeId}${snapshot.moveChanges.toDescription ? ` "${snapshot.moveChanges.toDescription}"` : ''}`,
+    ]
+
+    if (snapshot.moveChanges.phase === 'confirming') {
+      return {
+        tone: 'confirm',
+        title: `Move ${fileCount} file${fileCount === 1 ? '' : 's'} into ${snapshot.moveChanges.toChangeId}`,
+        details,
+        confirmLabel: 'Move',
+        onConfirm: () => { void commands.confirmMoveChanges() },
+        onCancel: commands.cancelMoveChanges,
+      }
+    }
+
+    if (snapshot.moveChanges.phase === 'executing' && snapshot.moveChanges.lastAction === 'move-changes') {
+      return {
+        tone: 'running',
+        title: 'Moving changes...',
+        details,
+      }
+    }
+  }
+
+  if (snapshot.moveChanges.phase === 'executing' && snapshot.moveChanges.fromChangeId === commit.changeId) {
+    if (snapshot.moveChanges.lastAction === 'discard-file' || snapshot.moveChanges.lastAction === 'split' || snapshot.moveChanges.lastAction === 'squash') {
+      return {
+        tone: 'running',
+        title: getMoveChangesExecutingTitle(snapshot),
+        details: snapshot.moveChanges.selectedPaths?.map((path) => `path: ${path}`) ?? [],
+      }
+    }
+  }
+
+  return null
+}
+
 function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowView[] {
   return snapshot.rows.map((row, index) => {
     if (row.type !== 'commit' || !row.commit) {
@@ -214,6 +356,7 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
         files: fileResource?.files ?? [],
         filesLoading: fileResource?.status === 'loading',
         actionsDisabled: commit.isImmutable || isInteractionLocked,
+        inlinePanel: buildInlinePanel(snapshot, commit, commands),
         state: {
           isSource,
           isDescendant,
@@ -248,6 +391,81 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
   })
 }
 
+function buildOperationItems(snapshot: RepoSnapshot, commands: RepoCommands): OperationItemViewModel[] {
+  const operationItems: OperationItemViewModel[] = []
+  const opLogById = new Map(snapshot.resources.operations.items.map((item) => [item.id, item]))
+
+  for (const operation of snapshot.recentOperations) {
+    if (operation.afterOpId && opLogById.has(operation.afterOpId)) {
+      continue
+    }
+
+    operationItems.push({
+      key: operation.key,
+      status: operation.status,
+      title: operation.title,
+      summary: operation.summary,
+      timestamp: operation.timestamp,
+      relativeTime: formatRelativeTime(operation.timestamp),
+      details: operation.details,
+      restoreOperationId: operation.status === 'success' ? operation.beforeOpId ?? null : null,
+      onRestore: operation.beforeOpId ? () => { void commands.restoreOperation(operation.beforeOpId!) } : undefined,
+    })
+  }
+
+  for (const entry of snapshot.resources.operations.items) {
+    const matched = snapshot.recentOperations.find((operation) => operation.afterOpId === entry.id)
+    operationItems.push({
+      key: entry.id,
+      status: matched?.status ?? 'success',
+      title: matched?.title ?? entry.description,
+      summary: matched?.summary ?? entry.user,
+      timestamp: entry.timestamp,
+      relativeTime: formatRelativeTime(entry.timestamp),
+      details: matched?.details,
+      restoreOperationId: matched?.beforeOpId ?? null,
+      onRestore: matched?.beforeOpId ? () => { void commands.restoreOperation(matched.beforeOpId!) } : undefined,
+    })
+  }
+
+  return operationItems
+}
+
+function buildOperationsChip(snapshot: RepoSnapshot, commands: RepoCommands): RepoScreenModel['toolbar']['operationsChip'] {
+  const activeOperation = snapshot.recentOperations.find((operation) => operation.status === 'running')
+  if (activeOperation) {
+    return {
+      label: `Ops · ${getOperationVerb(activeOperation.kind)}`,
+      status: 'running',
+      onClick: commands.openOperationDrawer,
+    }
+  }
+
+  const latestOperation = snapshot.recentOperations[0]
+  if (!latestOperation) {
+    return {
+      label: 'Ops',
+      status: 'idle',
+      onClick: commands.openOperationDrawer,
+    }
+  }
+
+  if (latestOperation.status === 'failed') {
+    return {
+      label: 'Ops · Failed',
+      status: 'failed',
+      onClick: commands.openOperationDrawer,
+    }
+  }
+
+  const successfulCount = snapshot.recentOperations.filter((operation) => operation.status === 'success').length
+  return {
+    label: `Ops · ${successfulCount} recent`,
+    status: 'success',
+    onClick: commands.openOperationDrawer,
+  }
+}
+
 function buildScreenModel(snapshot: RepoSnapshot, commands: RepoCommands): RepoScreenModel {
   const hasRemoteBookmarks = snapshot.rows.some(
     (row) => row.type === 'commit' && row.commit?.bookmarks.some((bookmark) => bookmark.isRemote),
@@ -265,6 +483,7 @@ function buildScreenModel(snapshot: RepoSnapshot, commands: RepoCommands): RepoS
         || snapshot.moveChanges.phase !== 'idle',
       onToggleRemoteBookmarks: commands.toggleRemoteBookmarks,
       onFetch: () => { void commands.fetchAll() },
+      operationsChip: buildOperationsChip(snapshot, commands),
     },
     errorBanner: snapshot.errorBanner
       ? {
@@ -272,22 +491,11 @@ function buildScreenModel(snapshot: RepoSnapshot, commands: RepoCommands): RepoS
           onClose: commands.closeErrorBanner,
         }
       : null,
-    fetchBanner: {
-      fetchState: snapshot.fetchState,
-      onUndo: () => { void commands.undo('fetch') },
-      onDismiss: commands.dismissFetchBanner,
-    },
-    rebaseBanner: {
-      rebase: snapshot.rebase,
-      onCancel: commands.cancelRebase,
-      onConfirm: () => { void commands.confirmRebase() },
-      onUndo: () => { void commands.undo('rebase') },
-    },
-    moveChangesBanner: {
-      moveChanges: snapshot.moveChanges,
-      onCancel: commands.cancelMoveChanges,
-      onConfirm: () => { void commands.confirmMoveChanges() },
-      onUndo: () => { void commands.undo('moveChanges') },
+    operationsDrawer: {
+      isOpen: snapshot.operationDrawerOpen,
+      items: buildOperationItems(snapshot, commands),
+      loading: snapshot.resources.operations.status === 'loading',
+      onClose: commands.closeOperationDrawer,
     },
     logRows: buildLogRows(snapshot, commands),
     bookmarkModal: buildBookmarkModal(snapshot, commands),
@@ -322,6 +530,10 @@ export function useRepoScreen(cwd: string): RepoScreenModel {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (session.getSnapshot().operationDrawerOpen) {
+          session.commands.closeOperationDrawer()
+          return
+        }
         session.commands.cancelInteraction()
       }
     }

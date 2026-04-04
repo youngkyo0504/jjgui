@@ -1,6 +1,6 @@
 import type { GraphRow } from '../types'
 import type { RepoApiPort } from './ports'
-import type { ChangedFile, FetchRemoteResult, PushScope } from './types'
+import type { ChangedFile, FetchRemoteResult, OperationLogEntry, OperationResult, PushScope } from './types'
 
 interface JsonObject {
   [key: string]: unknown
@@ -61,6 +61,10 @@ export function createHttpRepoApi(): RepoApiPort {
       return requestJson<GraphRow[]>('/api/log', cwd)
     },
 
+    loadOperations(cwd) {
+      return requestJson<OperationLogEntry[]>('/api/operations', cwd)
+    },
+
     async loadDescription(cwd, changeId) {
       const data = await requestJson<{ description?: string }>(`/api/description/${changeId}`, cwd)
       return data.description === '(no description set)' ? '' : (data.description ?? '')
@@ -93,7 +97,7 @@ export function createHttpRepoApi(): RepoApiPort {
     },
 
     rebase(cwd, input) {
-      return requestJson<{ beforeOpId: string }>('/api/rebase', cwd, jsonBody(input))
+      return requestJson<OperationResult>('/api/rebase', cwd, jsonBody(input))
     },
 
     undo(cwd, operationId) {
@@ -101,19 +105,19 @@ export function createHttpRepoApi(): RepoApiPort {
     },
 
     split(cwd, input) {
-      return requestJson<{ beforeOpId: string }>('/api/split', cwd, jsonBody(input))
+      return requestJson<OperationResult>('/api/split', cwd, jsonBody(input))
     },
 
     squash(cwd, changeId) {
-      return requestJson<{ beforeOpId: string }>('/api/squash', cwd, jsonBody({ changeId }))
+      return requestJson<OperationResult>('/api/squash', cwd, jsonBody({ changeId }))
     },
 
     discardFile(cwd, input) {
-      return requestJson<{ beforeOpId: string }>('/api/discard-file', cwd, jsonBody(input))
+      return requestJson<OperationResult>('/api/discard-file', cwd, jsonBody(input))
     },
 
     moveChanges(cwd, input) {
-      return requestJson<{ beforeOpId: string }>('/api/move-changes', cwd, jsonBody(input))
+      return requestJson<OperationResult>('/api/move-changes', cwd, jsonBody(input))
     },
 
     bookmarkRename(cwd, input) {
@@ -140,12 +144,13 @@ export function createHttpRepoApi(): RepoApiPort {
     },
 
     async fetchAll(cwd) {
-      const data = await requestJson<{ beforeOpId?: string | null; results?: FetchRemoteResult[] }>('/api/fetch', cwd, {
+      const data = await requestJson<{ beforeOpId?: string | null; afterOpId?: string | null; results?: FetchRemoteResult[] }>('/api/fetch', cwd, {
         method: 'POST',
       })
 
       return {
         beforeOpId: data.beforeOpId ?? null,
+        afterOpId: data.afterOpId ?? null,
         results: data.results ?? [],
       }
     },

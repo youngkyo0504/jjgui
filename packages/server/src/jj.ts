@@ -42,8 +42,22 @@ export interface RemoteFetchResult {
   output: string
 }
 
+export interface OperationResult {
+  beforeOpId: string
+  afterOpId: string
+}
+
+export interface OperationLogEntry {
+  id: string
+  user: string
+  description: string
+  timestamp: string
+  isCurrent: boolean
+}
+
 export interface FetchAllRemotesResult {
   beforeOpId: string | null
+  afterOpId: string | null
   results: RemoteFetchResult[]
 }
 
@@ -88,6 +102,8 @@ const TEMPLATE = [
   '"\x1f"',
   'if(hidden, "true", "false")',
 ].join(' ++ ')
+
+const OP_LOG_TEMPLATE = 'self.id().short() ++ "\\0" ++ self.time().start().format("%Y-%m-%d %H:%M:%S") ++ "\\0" ++ self.user() ++ "\\0" ++ self.description().first_line() ++ "\\0" ++ if(self.current_operation(), "true", "false") ++ "\\n"'
 
 function splitGraphAndData(line: string): { graphPrefix: string; data: string } {
   // commit 라인은 \x1f 구분자를 포함하므로, 첫 \x1f 앞의 changeId 시작 위치를 역추적
@@ -272,17 +288,42 @@ async function getCurrentOperationId(cwd: string): Promise<string> {
   return result.trim()
 }
 
-/** rebase 실행 후 이전 operation id를 반환한다 (undo용) */
+async function captureOperationResult(cwd: string, operation: () => Promise<void>): Promise<OperationResult> {
+  const beforeOpId = await getCurrentOperationId(cwd)
+  await operation()
+  const afterOpId = await getCurrentOperationId(cwd)
+  return { beforeOpId, afterOpId }
+}
+
+export async function getOperationLog(cwd: string, limit = 30): Promise<OperationLogEntry[]> {
+  const result = await $`jj --ignore-working-copy op log --no-graph -T ${OP_LOG_TEMPLATE} --limit ${String(limit)}`.cwd(cwd).text()
+
+  return result
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [id = '', timestamp = '', user = '', description = '', isCurrent = 'false'] = line.split('\0')
+      return {
+        id,
+        timestamp,
+        user,
+        description,
+        isCurrent: isCurrent === 'true',
+      }
+    })
+}
+
+/** rebase 실행 후 이전/이후 operation id를 반환한다 */
 export async function rebaseCommit(
   cwd: string,
   sourceChangeId: string,
   destinationChangeId: string,
   mode: RebaseMode = 'source',
-): Promise<string> {
-  const beforeOpId = await getCurrentOperationId(cwd)
+) : Promise<OperationResult> {
   const flag = mode === 'source' ? '-s' : mode === 'revision' ? '-r' : '-b'
-  await $`jj rebase ${flag} ${sourceChangeId} -d ${destinationChangeId}`.cwd(cwd)
-  return beforeOpId
+  return captureOperationResult(cwd, async () => {
+    await $`jj rebase ${flag} ${sourceChangeId} -d ${destinationChangeId}`.cwd(cwd)
+  })
 }
 
 /** 특정 operation 상태로 복원한다 */
@@ -328,38 +369,38 @@ export async function bookmarkRename(cwd: string, oldName: string, newName: stri
 }
 
 /** 커밋을 분할한다 (paths에 해당하는 파일이 첫 번째 커밋에 남음) */
-export async function splitCommit(cwd: string, changeId: string, paths: string[]): Promise<string> {
-  const beforeOpId = await getCurrentOperationId(cwd)
+export async function splitCommit(cwd: string, changeId: string, paths: string[]): Promise<OperationResult> {
   // 기존 description을 가져와서 -m으로 전달하여 에디터가 열리지 않도록 함
   const description = await $`jj log --no-graph -r ${changeId} -T 'description'`.cwd(cwd).text()
   const desc = description.replace(/\n$/, '') || '(split)'
-  try {
-    await $`jj split -r ${changeId} -m ${desc} ${paths}`.cwd(cwd).quiet()
-  } catch (e: any) {
-    throw new Error(e.stderr?.toString()?.trim() || e.message || String(e))
-  }
-  return beforeOpId
+  return captureOperationResult(cwd, async () => {
+    try {
+      await $`jj split -r ${changeId} -m ${desc} ${paths}`.cwd(cwd).quiet()
+    } catch (e: any) {
+      throw new Error(e.stderr?.toString()?.trim() || e.message || String(e))
+    }
+  })
 }
 
 /** 커밋을 부모로 합친다 */
-export async function squashCommit(cwd: string, changeId: string): Promise<string> {
-  const beforeOpId = await getCurrentOperationId(cwd)
-  await $`jj squash -r ${changeId}`.cwd(cwd)
-  return beforeOpId
+export async function squashCommit(cwd: string, changeId: string): Promise<OperationResult> {
+  return captureOperationResult(cwd, async () => {
+    await $`jj squash -r ${changeId}`.cwd(cwd)
+  })
 }
 
 /** 특정 파일의 변경만 현재 revision에서 제거한다 */
-export async function discardFileChanges(cwd: string, changeId: string, path: string): Promise<string> {
-  const beforeOpId = await getCurrentOperationId(cwd)
-  await $`jj restore --changes-in ${changeId} --restore-descendants ${path}`.cwd(cwd).quiet()
-  return beforeOpId
+export async function discardFileChanges(cwd: string, changeId: string, path: string): Promise<OperationResult> {
+  return captureOperationResult(cwd, async () => {
+    await $`jj restore --changes-in ${changeId} --restore-descendants ${path}`.cwd(cwd).quiet()
+  })
 }
 
 /** 변경사항을 다른 커밋으로 이동한다 */
-export async function moveChanges(cwd: string, fromChangeId: string, toChangeId: string, paths: string[]): Promise<string> {
-  const beforeOpId = await getCurrentOperationId(cwd)
-  await $`jj squash --keep-emptied --from ${fromChangeId} --into ${toChangeId} ${paths}`.cwd(cwd)
-  return beforeOpId
+export async function moveChanges(cwd: string, fromChangeId: string, toChangeId: string, paths: string[]): Promise<OperationResult> {
+  return captureOperationResult(cwd, async () => {
+    await $`jj squash --keep-emptied --from ${fromChangeId} --into ${toChangeId} ${paths}`.cwd(cwd)
+  })
 }
 
 /** git remote 목록을 가져온다 */
@@ -372,7 +413,7 @@ export async function getRemotes(cwd: string): Promise<string[]> {
 export async function fetchAllRemotes(cwd: string): Promise<FetchAllRemotesResult> {
   const remotes = await getRemotes(cwd)
   if (remotes.length === 0) {
-    return { beforeOpId: null, results: [] }
+    return { beforeOpId: null, afterOpId: null, results: [] }
   }
 
   const beforeOpId = await getCurrentOperationId(cwd)
@@ -399,6 +440,7 @@ export async function fetchAllRemotes(cwd: string): Promise<FetchAllRemotesResul
 
   return {
     beforeOpId: anySuccess ? beforeOpId : null,
+    afterOpId: anySuccess ? await getCurrentOperationId(cwd) : null,
     results,
   }
 }

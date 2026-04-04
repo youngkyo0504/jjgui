@@ -1,12 +1,10 @@
 import LogView from './components/LogView'
-import RebaseBanner from './components/RebaseBanner'
-import MoveChangesBanner from './components/MoveChangesBanner'
-import FetchBanner from './components/FetchBanner'
 import BookmarkModal from './components/BookmarkModal'
 import SetBookmarkModal from './components/SetBookmarkModal'
 import FileSelectModal from './components/FileSelectModal'
 import ConfirmModal from './components/ConfirmModal'
 import ErrorBanner from './components/ErrorBanner'
+import OperationDrawer from './components/OperationDrawer'
 import { useRepoScreen } from './repo/useRepoScreen'
 import './components/styles.css'
 
@@ -35,6 +33,12 @@ export default function App() {
         >
           {screen.toolbar.fetchLabel}
         </button>
+        <button
+          className={`app-toolbar-btn app-toolbar-btn--ops app-toolbar-btn--ops-${screen.toolbar.operationsChip.status}`}
+          onClick={screen.toolbar.operationsChip.onClick}
+        >
+          {screen.toolbar.operationsChip.label}
+        </button>
       </div>
 
       {screen.errorBanner && (
@@ -44,25 +48,13 @@ export default function App() {
         />
       )}
 
-      <FetchBanner
-        fetchState={screen.fetchBanner.fetchState}
-        onUndo={screen.fetchBanner.onUndo}
-        onDismiss={screen.fetchBanner.onDismiss}
-      />
-      <RebaseBanner
-        rebase={screen.rebaseBanner.rebase}
-        onCancel={screen.rebaseBanner.onCancel}
-        onConfirm={screen.rebaseBanner.onConfirm}
-        onUndo={screen.rebaseBanner.onUndo}
-      />
-      <MoveChangesBanner
-        moveChanges={screen.moveChangesBanner.moveChanges}
-        onCancel={screen.moveChangesBanner.onCancel}
-        onConfirm={screen.moveChangesBanner.onConfirm}
-        onUndo={screen.moveChangesBanner.onUndo}
-      />
-
       <LogView rows={screen.logRows} />
+      <OperationDrawer
+        isOpen={screen.operationsDrawer.isOpen}
+        items={screen.operationsDrawer.items}
+        loading={screen.operationsDrawer.loading}
+        onClose={screen.operationsDrawer.onClose}
+      />
 
       {screen.bookmarkModal?.kind === 'rename' && (
         <BookmarkModal

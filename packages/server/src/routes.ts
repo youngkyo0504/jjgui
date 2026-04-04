@@ -1,4 +1,4 @@
-import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit, bookmarkCreate, bookmarkMove, bookmarkDelete, bookmarkRename, bookmarkList, bookmarkSet, splitCommit, squashCommit, discardFileChanges, moveChanges, getRemotes, pushBookmark, fetchAllRemotes } from './jj'
+import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit, bookmarkCreate, bookmarkMove, bookmarkDelete, bookmarkRename, bookmarkList, bookmarkSet, splitCommit, squashCommit, discardFileChanges, moveChanges, getRemotes, pushBookmark, fetchAllRemotes, getOperationLog } from './jj'
 
 // cwd별 SSE 클라이언트 관리
 const sseClients = new Map<string, Set<ReadableStreamDefaultController>>()
@@ -28,6 +28,17 @@ export async function handleRequest(req: Request): Promise<Response> {
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     try {
       return Response.json(await getGraphLog(cwd))
+    } catch (e) {
+      return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // GET /api/operations?cwd=...
+  if (req.method === 'GET' && url.pathname === '/api/operations') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      return Response.json(await getOperationLog(cwd))
     } catch (e) {
       return Response.json({ error: String(e) }, { status: 500 })
     }
@@ -77,8 +88,8 @@ export async function handleRequest(req: Request): Promise<Response> {
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     try {
       const body = await req.json()
-      const beforeOpId = await rebaseCommit(cwd, body.sourceChangeId, body.destinationChangeId, body.mode ?? 'source')
-      return Response.json({ ok: true, beforeOpId })
+      const result = await rebaseCommit(cwd, body.sourceChangeId, body.destinationChangeId, body.mode ?? 'source')
+      return Response.json({ ok: true, ...result })
     } catch (e) {
       return Response.json({ error: String(e) }, { status: 500 })
     }
@@ -207,8 +218,8 @@ export async function handleRequest(req: Request): Promise<Response> {
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     try {
       const body = await req.json()
-      const beforeOpId = await splitCommit(cwd, body.changeId, body.paths)
-      return Response.json({ ok: true, beforeOpId })
+      const result = await splitCommit(cwd, body.changeId, body.paths)
+      return Response.json({ ok: true, ...result })
     } catch (e) {
       return Response.json({ ok: false, error: String(e) }, { status: 500 })
     }
@@ -220,8 +231,8 @@ export async function handleRequest(req: Request): Promise<Response> {
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     try {
       const body = await req.json()
-      const beforeOpId = await squashCommit(cwd, body.changeId)
-      return Response.json({ ok: true, beforeOpId })
+      const result = await squashCommit(cwd, body.changeId)
+      return Response.json({ ok: true, ...result })
     } catch (e) {
       return Response.json({ ok: false, error: String(e) }, { status: 500 })
     }
@@ -233,8 +244,8 @@ export async function handleRequest(req: Request): Promise<Response> {
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     try {
       const body = await req.json()
-      const beforeOpId = await discardFileChanges(cwd, body.changeId, body.path)
-      return Response.json({ ok: true, beforeOpId })
+      const result = await discardFileChanges(cwd, body.changeId, body.path)
+      return Response.json({ ok: true, ...result })
     } catch (e) {
       return Response.json({ ok: false, error: String(e) }, { status: 500 })
     }
@@ -246,8 +257,8 @@ export async function handleRequest(req: Request): Promise<Response> {
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     try {
       const body = await req.json()
-      const beforeOpId = await moveChanges(cwd, body.fromChangeId, body.toChangeId, body.paths)
-      return Response.json({ ok: true, beforeOpId })
+      const result = await moveChanges(cwd, body.fromChangeId, body.toChangeId, body.paths)
+      return Response.json({ ok: true, ...result })
     } catch (e) {
       return Response.json({ ok: false, error: String(e) }, { status: 500 })
     }
