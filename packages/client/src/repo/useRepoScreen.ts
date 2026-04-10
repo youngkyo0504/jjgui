@@ -54,6 +54,7 @@ export interface CommitRowViewModel {
     isRebaseMode: boolean
     isMoveChangesMode: boolean
     isContextMenuLocked: boolean
+    isReadOnlyFileList: boolean
     showFileList: boolean
   }
   actions: {
@@ -400,6 +401,7 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
           isRebaseMode,
           isMoveChangesMode,
           isContextMenuLocked,
+          isReadOnlyFileList: commit.hasConflict,
           showFileList,
         },
         actions: {

@@ -7,17 +7,18 @@ interface Props {
   files: ChangedFile[]
   loading: boolean
   actionsDisabled: boolean
+  readOnly: boolean
   onDiscardFile: (path: string) => void
   onMoveFile: (path: string) => void
   moveSelection: MoveSelectionViewModel | null
 }
 
-export default function FileList({ files, loading, actionsDisabled, onDiscardFile, onMoveFile, moveSelection }: Props) {
+export default function FileList({ files, loading, actionsDisabled, readOnly, onDiscardFile, onMoveFile, moveSelection }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: ChangedFile } | null>(null)
 
   useEffect(() => {
     setContextMenu(null)
-  }, [files, moveSelection])
+  }, [actionsDisabled, files, moveSelection, readOnly])
 
   if (moveSelection) {
     const selected = new Set(moveSelection.selectedPaths)
@@ -85,14 +86,21 @@ export default function FileList({ files, loading, actionsDisabled, onDiscardFil
   if (files.length === 0) return <div className="file-list-empty">no changed files</div>
 
   return (
-    <div className="file-list">
+    <div className={`file-list${readOnly ? ' file-list--readonly' : ''}`}>
+      {readOnly && (
+        <div className="file-list-note">Conflict 파일은 터미널에서 해결하세요.</div>
+      )}
       {files.map((file) => (
         <div
           key={file.path}
-          className="file-list-item"
+          className={[
+            'file-list-item',
+            file.isConflict && 'file-list-item--conflict',
+            readOnly && 'file-list-item--readonly',
+          ].filter(Boolean).join(' ')}
           title={file.path}
           onContextMenu={(event) => {
-            if (actionsDisabled) return
+            if (actionsDisabled || readOnly) return
             event.preventDefault()
             event.stopPropagation()
             setContextMenu({ x: event.clientX, y: event.clientY, file })
@@ -100,6 +108,7 @@ export default function FileList({ files, loading, actionsDisabled, onDiscardFil
         >
           <span className={`file-status file-status--${file.status}`}>{file.status}</span>
           <span className="file-path">{file.path}</span>
+          {file.isConflict && <span className="file-conflict-badge">conflict</span>}
         </div>
       ))}
       {contextMenu && (

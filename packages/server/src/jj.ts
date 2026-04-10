@@ -34,6 +34,7 @@ export interface GraphRow {
 export interface ChangedFile {
   path: string
   status: string
+  isConflict: boolean
 }
 
 export interface RemoteFetchResult {
@@ -253,15 +254,57 @@ export async function getGraphLog(cwd: string): Promise<GraphRow[]> {
 }
 
 export async function getChangedFiles(cwd: string, changeId: string): Promise<ChangedFile[]> {
-  const result = await $`jj show ${changeId} --summary`.cwd(cwd).text()
+  const [summaryOutput, conflictPaths] = await Promise.all([
+    $`jj show ${changeId} --summary`.cwd(cwd).text(),
+    getConflictPaths(cwd, changeId),
+  ])
 
-  return result
+  const files = summaryOutput
     .split('\n')
     .filter((line) => /^[AMD]\s/.test(line))
     .map((line) => ({
       status: line[0],
       path: line.slice(2).trim(),
+      isConflict: conflictPaths.has(line.slice(2).trim()),
     }))
+
+  const seenPaths = new Set(files.map((file) => file.path))
+  for (const path of conflictPaths) {
+    if (seenPaths.has(path)) continue
+    files.push({
+      path,
+      status: 'M',
+      isConflict: true,
+    })
+  }
+
+  return files
+}
+
+async function getConflictPaths(cwd: string, changeId: string): Promise<Set<string>> {
+  try {
+    const result = await $`jj resolve --list -r ${changeId}`.cwd(cwd).text()
+    return new Set(
+      result
+        .split('\n')
+        .map(parseConflictPath)
+        .filter((path): path is string => path !== null),
+    )
+  } catch (error: any) {
+    const message = formatCommandError(error)
+    if (message.includes('No conflicts found at this revision')) {
+      return new Set()
+    }
+    throw new Error(message)
+  }
+}
+
+function parseConflictPath(line: string): string | null {
+  const trimmed = line.trimEnd()
+  if (!trimmed) return null
+
+  const match = trimmed.match(/^(.*?)(?:\s{2,}|\t+).+$/)
+  return (match?.[1] ?? trimmed).trimEnd() || null
 }
 
 export async function editCommit(cwd: string, changeId: string): Promise<void> {

@@ -1,6 +1,7 @@
 export interface ChangedFile {
   path: string
   status: string
+  isConflict: boolean
 }
 
 export type OperationKind =

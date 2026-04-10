@@ -134,6 +134,7 @@ export default function CommitRow({ row }: Props) {
             files={row.files}
             loading={row.filesLoading}
             actionsDisabled={row.actionsDisabled}
+            readOnly={row.state.isReadOnlyFileList}
             onDiscardFile={row.actions.onDiscardFile}
             onMoveFile={row.actions.onMoveSingleFile}
             moveSelection={row.moveSelection}

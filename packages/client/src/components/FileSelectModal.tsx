@@ -1,9 +1,5 @@
 import { useState } from 'react'
-
-interface ChangedFile {
-  path: string
-  status: string
-}
+import type { ChangedFile } from '../repo/types'
 
 interface Props {
   title: string

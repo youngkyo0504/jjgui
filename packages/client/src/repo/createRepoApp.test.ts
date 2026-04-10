@@ -27,6 +27,10 @@ function makeCommitRow(changeId: string, parents: string[] = []): GraphRow {
   }
 }
 
+function makeChangedFile(path: string, status: string, isConflict = false): ChangedFile {
+  return { path, status, isConflict }
+}
+
 function createFakeEvents() {
   let onRefresh: (() => void) | null = null
 
@@ -129,8 +133,8 @@ test('rebase flow computes descendants and ignores subtree destinations', async 
 
 test('split validation stays at the boundary and prevents empty original commits', async () => {
   const files: ChangedFile[] = [
-    { path: 'a.ts', status: 'A' },
-    { path: 'b.ts', status: 'M' },
+    makeChangedFile('a.ts', 'A'),
+    makeChangedFile('b.ts', 'M'),
   ]
   let splitCalls = 0
   const session = createRepoApp({
@@ -160,8 +164,8 @@ test('split validation stays at the boundary and prevents empty original commits
 
 test('move single file starts inline selection with the clicked file preselected', async () => {
   const files: ChangedFile[] = [
-    { path: 'a.ts', status: 'A' },
-    { path: 'b.ts', status: 'M' },
+    makeChangedFile('a.ts', 'A'),
+    makeChangedFile('b.ts', 'M'),
   ]
   const session = createRepoApp({
     api: createFakeApi({
@@ -190,8 +194,8 @@ test('move single file starts inline selection with the clicked file preselected
 
 test('inline move selection continues into destination flow and moves all selected files', async () => {
   const files: ChangedFile[] = [
-    { path: 'a.ts', status: 'A' },
-    { path: 'b.ts', status: 'M' },
+    makeChangedFile('a.ts', 'A'),
+    makeChangedFile('b.ts', 'M'),
   ]
   const moveCalls: Array<{ fromChangeId: string; toChangeId: string; paths: string[] }> = []
   const session = createRepoApp({
@@ -236,7 +240,7 @@ test('inline move selection continues into destination flow and moves all select
 })
 
 test('cancelInteraction closes inline move selection without entering moveChanges mode', async () => {
-  const files: ChangedFile[] = [{ path: 'a.ts', status: 'A' }]
+  const files: ChangedFile[] = [makeChangedFile('a.ts', 'A')]
   const session = createRepoApp({
     api: createFakeApi({
       loadLog: async () => [makeCommitRow('source')],
@@ -265,11 +269,11 @@ test('inline move selection survives refresh and removes paths that disappear', 
         loadChangedFilesCalls++
         return loadChangedFilesCalls === 1
           ? [
-              { path: 'a.ts', status: 'A' },
-              { path: 'b.ts', status: 'M' },
+              makeChangedFile('a.ts', 'A'),
+              makeChangedFile('b.ts', 'M'),
             ]
           : [
-              { path: 'b.ts', status: 'M' },
+              makeChangedFile('b.ts', 'M'),
             ]
       },
     }),
@@ -286,10 +290,31 @@ test('inline move selection survives refresh and removes paths that disappear', 
     kind: 'file-select',
     mode: 'move-changes',
     changeId: 'source',
-    files: [{ path: 'b.ts', status: 'M' }],
+    files: [makeChangedFile('b.ts', 'M')],
     initialSelectedPaths: ['a.ts'],
     selectedPaths: [],
     notice: '1 selected file is no longer part of this commit.',
+  })
+  session.dispose()
+})
+
+test('expanded file resources preserve conflict metadata from the API', async () => {
+  const files: ChangedFile[] = [makeChangedFile('conflicted.ts', 'M', true)]
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => [makeCommitRow('source')],
+      loadChangedFiles: async () => files,
+    }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  session.commands.handleRowClick('source', 'source')
+  await Bun.sleep(0)
+
+  expect(session.getSnapshot().resources.files.source).toEqual({
+    status: 'ready',
+    files,
   })
   session.dispose()
 })
@@ -305,7 +330,7 @@ test('refresh clears inline move selection if the source commit disappears', asy
           ? [makeCommitRow('source'), makeCommitRow('target')]
           : [makeCommitRow('target')]
       },
-      loadChangedFiles: async () => [{ path: 'a.ts', status: 'A' }],
+      loadChangedFiles: async () => [makeChangedFile('a.ts', 'A')],
     }),
     events: events.events,
   }).createSession('/repo')
