@@ -158,6 +158,169 @@ test('split validation stays at the boundary and prevents empty original commits
   session.dispose()
 })
 
+test('move single file starts inline selection with the clicked file preselected', async () => {
+  const files: ChangedFile[] = [
+    { path: 'a.ts', status: 'A' },
+    { path: 'b.ts', status: 'M' },
+  ]
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => [makeCommitRow('source'), makeCommitRow('target')],
+      loadChangedFiles: async () => files,
+    }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  await session.commands.startMoveSingleFile('source', 'a.ts')
+
+  expect(session.getSnapshot().moveChanges.phase).toBe('idle')
+  expect(session.getSnapshot().expandedChangeIds.has('source')).toBe(true)
+  expect(session.getSnapshot().dialog).toEqual({
+    kind: 'file-select',
+    mode: 'move-changes',
+    changeId: 'source',
+    files,
+    initialSelectedPaths: ['a.ts'],
+    selectedPaths: ['a.ts'],
+    notice: null,
+  })
+  session.dispose()
+})
+
+test('inline move selection continues into destination flow and moves all selected files', async () => {
+  const files: ChangedFile[] = [
+    { path: 'a.ts', status: 'A' },
+    { path: 'b.ts', status: 'M' },
+  ]
+  const moveCalls: Array<{ fromChangeId: string; toChangeId: string; paths: string[] }> = []
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => [makeCommitRow('source'), makeCommitRow('target')],
+      loadChangedFiles: async () => files,
+      moveChanges: async (_cwd, input) => {
+        moveCalls.push(input)
+        return { beforeOpId: 'move-op', afterOpId: 'move-after' }
+      },
+    }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  await session.commands.startMoveSingleFile('source', 'a.ts')
+  session.commands.setMoveChangesSelection(['a.ts', 'b.ts'])
+
+  await session.commands.submitFileSelection(['a.ts', 'b.ts'])
+  expect(session.getSnapshot().dialog).toBeNull()
+  expect(session.getSnapshot().moveChanges).toMatchObject({
+    phase: 'selecting-destination',
+    fromChangeId: 'source',
+    selectedPaths: ['a.ts', 'b.ts'],
+  })
+
+  session.commands.selectMoveDestination('target', 'target')
+  expect(session.getSnapshot().moveChanges.phase).toBe('confirming')
+
+  await session.commands.confirmMoveChanges()
+
+  expect(moveCalls).toEqual([{
+    fromChangeId: 'source',
+    toChangeId: 'target',
+    paths: ['a.ts', 'b.ts'],
+  }])
+  expect(session.getSnapshot().moveChanges).toEqual({
+    phase: 'idle',
+    lastAction: 'move-changes',
+  })
+  session.dispose()
+})
+
+test('cancelInteraction closes inline move selection without entering moveChanges mode', async () => {
+  const files: ChangedFile[] = [{ path: 'a.ts', status: 'A' }]
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => [makeCommitRow('source')],
+      loadChangedFiles: async () => files,
+    }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  await session.commands.startMoveSingleFile('source', 'a.ts')
+
+  session.commands.cancelInteraction()
+
+  expect(session.getSnapshot().dialog).toBeNull()
+  expect(session.getSnapshot().moveChanges.phase).toBe('idle')
+  session.dispose()
+})
+
+test('inline move selection survives refresh and removes paths that disappear', async () => {
+  const events = createFakeEvents()
+  let loadChangedFilesCalls = 0
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => [makeCommitRow('source'), makeCommitRow('target')],
+      loadChangedFiles: async () => {
+        loadChangedFilesCalls++
+        return loadChangedFilesCalls === 1
+          ? [
+              { path: 'a.ts', status: 'A' },
+              { path: 'b.ts', status: 'M' },
+            ]
+          : [
+              { path: 'b.ts', status: 'M' },
+            ]
+      },
+    }),
+    events: events.events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  await session.commands.startMoveSingleFile('source', 'a.ts')
+
+  events.emitRefresh()
+  await Bun.sleep(0)
+
+  expect(session.getSnapshot().dialog).toEqual({
+    kind: 'file-select',
+    mode: 'move-changes',
+    changeId: 'source',
+    files: [{ path: 'b.ts', status: 'M' }],
+    initialSelectedPaths: ['a.ts'],
+    selectedPaths: [],
+    notice: '1 selected file is no longer part of this commit.',
+  })
+  session.dispose()
+})
+
+test('refresh clears inline move selection if the source commit disappears', async () => {
+  const events = createFakeEvents()
+  let loadLogCalls = 0
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => {
+        loadLogCalls++
+        return loadLogCalls === 1
+          ? [makeCommitRow('source'), makeCommitRow('target')]
+          : [makeCommitRow('target')]
+      },
+      loadChangedFiles: async () => [{ path: 'a.ts', status: 'A' }],
+    }),
+    events: events.events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  await session.commands.startMoveSingleFile('source', 'a.ts')
+
+  events.emitRefresh()
+  await Bun.sleep(0)
+
+  expect(session.getSnapshot().dialog).toBeNull()
+  expect(session.getSnapshot().errorBanner).toBe('Move selection was cleared because the source commit disappeared.')
+  session.dispose()
+})
+
 test('bookmark backwards confirmation is lifted into the app service dialog flow', async () => {
   const bookmarkSetCalls: Array<{ name: string; changeId: string; allowBackwards: boolean }> = []
   let loadLogCalls = 0

@@ -327,6 +327,10 @@ body {
   padding: 6px 0;
 }
 
+.file-list--selecting {
+  padding: 8px 0;
+}
+
 .file-list-item {
   display: flex;
   align-items: center;
@@ -371,6 +375,33 @@ body {
   font-size: 12px;
   font-style: italic;
   padding: 4px 0;
+}
+
+.file-selection-summary {
+  margin-bottom: 8px;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.file-selection-note {
+  margin-top: 8px;
+  color: var(--orange);
+  font-size: 12px;
+}
+
+.file-selection-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.file-selection-count {
+  margin-right: auto;
+  color: var(--fg-muted);
+  font-size: 12px;
 }
 
 .inline-action-panel {
@@ -991,6 +1022,10 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   margin-bottom: 4px;
+}
+
+.file-select-list--inline {
+  margin-bottom: 0;
 }
 
 .file-select-item {

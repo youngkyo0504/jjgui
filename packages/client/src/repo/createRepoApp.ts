@@ -36,10 +36,28 @@ type OperationLogResource = {
   items: OperationLogEntry[]
 }
 
+type SplitFileSelectDialog = {
+  kind: 'file-select'
+  mode: 'split'
+  changeId: string
+  files: ChangedFile[]
+}
+
+type MoveChangesFileSelectDialog = {
+  kind: 'file-select'
+  mode: 'move-changes'
+  changeId: string
+  files: ChangedFile[]
+  initialSelectedPaths?: string[]
+  selectedPaths: string[]
+  notice?: string | null
+}
+
 export type RepoDialog =
   | { kind: 'bookmark-set'; changeId: string }
   | { kind: 'bookmark-rename'; bookmarkName: string }
-  | { kind: 'file-select'; mode: 'split' | 'move-changes'; changeId: string; files: ChangedFile[] }
+  | SplitFileSelectDialog
+  | MoveChangesFileSelectDialog
   | { kind: 'confirm'; confirmKind: 'squash'; changeId: string; description: string; parentDescription: string }
   | { kind: 'confirm'; confirmKind: 'subtree-push'; bookmark: string }
   | { kind: 'confirm'; confirmKind: 'bookmark-backwards'; name: string; changeId: string }
@@ -91,10 +109,11 @@ export interface RepoCommands {
   submitBookmarkRename(newName: string): Promise<void>
   deleteBookmark(name: string): Promise<void>
   startSplit(changeId: string): Promise<void>
+  setMoveChangesSelection(selectedPaths: string[]): void
   submitFileSelection(selectedPaths: string[]): Promise<void>
   startSquash(changeId: string, description: string, parentDescription: string): void
   startMoveChanges(changeId: string): Promise<void>
-  startMoveSingleFile(changeId: string, path: string): void
+  startMoveSingleFile(changeId: string, path: string): Promise<void>
   discardFile(changeId: string, path: string): Promise<void>
   startRebase(changeId: string, description: string): void
   cancelRebase(): void
@@ -121,6 +140,10 @@ export interface RepoSession {
 
 export interface RepoApp {
   createSession(cwd: string): RepoSession
+}
+
+function isMoveChangesFileSelectDialog(dialog: RepoDialog | null): dialog is MoveChangesFileSelectDialog {
+  return dialog?.kind === 'file-select' && dialog.mode === 'move-changes'
 }
 
 function idleRebaseState(): RebaseState {
@@ -200,6 +223,7 @@ class RepoSessionImpl implements RepoSession {
     submitBookmarkRename: (newName) => this.submitBookmarkRename(newName),
     deleteBookmark: (name) => this.deleteBookmark(name),
     startSplit: (changeId) => this.startSplit(changeId),
+    setMoveChangesSelection: (selectedPaths) => this.setMoveChangesSelection(selectedPaths),
     submitFileSelection: (selectedPaths) => this.submitFileSelection(selectedPaths),
     startSquash: (changeId, description, parentDescription) => this.startSquash(changeId, description, parentDescription),
     startMoveChanges: (changeId) => this.startMoveChanges(changeId),
@@ -281,6 +305,10 @@ class RepoSessionImpl implements RepoSession {
   }
 
   private cancelInteraction(): void {
+    if (isMoveChangesFileSelectDialog(this.state.dialog)) {
+      this.dismissDialog()
+      return
+    }
     if (this.state.rebase.phase !== 'idle' && this.state.rebase.phase !== 'executing') {
       this.cancelRebase()
     }
@@ -436,12 +464,17 @@ class RepoSessionImpl implements RepoSession {
           .filter((row) => row.type === 'commit' && row.commit)
           .map((row) => row.commit!.changeId),
       )
+      const moveSelectionDialog = isMoveChangesFileSelectDialog(this.state.dialog) ? this.state.dialog : null
       const expandedChangeIds = new Set(
         [...this.state.expandedChangeIds].filter((changeId) => commitIds.has(changeId)),
       )
+      if (moveSelectionDialog && commitIds.has(moveSelectionDialog.changeId)) {
+        expandedChangeIds.add(moveSelectionDialog.changeId)
+      }
       const describingChangeId = this.state.describingChangeId && commitIds.has(this.state.describingChangeId)
         ? this.state.describingChangeId
         : null
+      const keepMoveSelectionDialog = moveSelectionDialog && commitIds.has(moveSelectionDialog.changeId)
 
       this.fileRequests.clear()
       this.bookmarksRequest = null
@@ -450,6 +483,10 @@ class RepoSessionImpl implements RepoSession {
         ...state,
         rows,
         appError: null,
+        dialog: keepMoveSelectionDialog ? state.dialog : moveSelectionDialog ? null : state.dialog,
+        errorBanner: keepMoveSelectionDialog || !moveSelectionDialog
+          ? state.errorBanner
+          : 'Move selection was cleared because the source commit disappeared.',
         expandedChangeIds,
         describingChangeId,
         resources: {
@@ -506,6 +543,50 @@ class RepoSessionImpl implements RepoSession {
     }))
   }
 
+  private setMoveChangesSelection(selectedPaths: string[]): void {
+    this.setState((state) => {
+      const dialog = isMoveChangesFileSelectDialog(state.dialog) ? state.dialog : null
+      if (!dialog) return state
+
+      const validPaths = new Set(dialog.files.map((file) => file.path))
+      const nextSelectedPaths = Array.from(new Set(selectedPaths)).filter((path) => validPaths.has(path))
+
+      return {
+        ...state,
+        dialog: {
+          ...dialog,
+          selectedPaths: nextSelectedPaths,
+          notice: null,
+        },
+      }
+    })
+  }
+
+  private reconcileMoveSelectionFiles(changeId: string, files: ChangedFile[]): void {
+    this.setState((state) => {
+      const dialog = isMoveChangesFileSelectDialog(state.dialog) ? state.dialog : null
+      if (!dialog || dialog.changeId !== changeId) return state
+
+      const validPaths = new Set(files.map((file) => file.path))
+      const nextSelectedPaths = dialog.selectedPaths.filter((path) => validPaths.has(path))
+      const removedCount = dialog.selectedPaths.length - nextSelectedPaths.length
+
+      return {
+        ...state,
+        dialog: {
+          ...dialog,
+          files,
+          selectedPaths: nextSelectedPaths,
+          notice: removedCount > 0
+            ? removedCount === 1
+              ? '1 selected file is no longer part of this commit.'
+              : `${removedCount} selected files are no longer part of this commit.`
+            : null,
+        },
+      }
+    })
+  }
+
   private async loadDescription(changeId: string): Promise<string> {
     const existing = this.state.resources.descriptions[changeId]
     if (existing?.status === 'ready') return existing.value
@@ -560,6 +641,7 @@ class RepoSessionImpl implements RepoSession {
           status: 'ready',
           files,
         })
+        this.reconcileMoveSelectionFiles(changeId, files)
 
         return files
       })
@@ -670,6 +752,10 @@ class RepoSessionImpl implements RepoSession {
     }
 
     if (this.state.rebase.phase !== 'idle' || this.state.moveChanges.phase !== 'idle') return
+
+    if (isMoveChangesFileSelectDialog(this.state.dialog) && this.state.dialog.changeId === changeId) {
+      return
+    }
 
     const expandedChangeIds = new Set(this.state.expandedChangeIds)
     const isExpanded = expandedChangeIds.has(changeId)
@@ -841,7 +927,9 @@ class RepoSessionImpl implements RepoSession {
     }
   }
 
-  private async startMoveChanges(changeId: string): Promise<void> {
+  private async startMoveChanges(changeId: string, initialSelectedPaths: string[] = []): Promise<void> {
+    if (this.state.rebase.phase !== 'idle' || this.state.moveChanges.phase !== 'idle') return
+
     this.setErrorBanner(null)
     try {
       const files = await this.loadChangedFiles(changeId, { silent: false })
@@ -850,9 +938,23 @@ class RepoSessionImpl implements RepoSession {
         return
       }
 
+      const filePaths = new Set(files.map((file) => file.path))
+      const selectedPaths = Array.from(new Set(initialSelectedPaths)).filter((path) => filePaths.has(path))
+      const expandedChangeIds = new Set(this.state.expandedChangeIds)
+      expandedChangeIds.add(changeId)
+
       this.setState((state) => ({
         ...state,
-        dialog: { kind: 'file-select', mode: 'move-changes', changeId, files },
+        dialog: {
+          kind: 'file-select',
+          mode: 'move-changes',
+          changeId,
+          files,
+          initialSelectedPaths: selectedPaths,
+          selectedPaths,
+          notice: null,
+        },
+        expandedChangeIds,
       }))
     } catch (error) {
       this.setErrorBanner(String(error))
@@ -863,12 +965,12 @@ class RepoSessionImpl implements RepoSession {
     const dialog = this.state.dialog
     if (!dialog || dialog.kind !== 'file-select') return
 
-    this.setState((state) => ({
-      ...state,
-      dialog: null,
-    }))
-
     if (dialog.mode === 'split') {
+      this.setState((state) => ({
+        ...state,
+        dialog: null,
+      }))
+
       const remainPaths = dialog.files
         .filter((file) => !selectedPaths.includes(file.path))
         .map((file) => file.path)
@@ -928,12 +1030,20 @@ class RepoSessionImpl implements RepoSession {
 
     if (this.state.rebase.phase !== 'idle') return
 
+    const validPaths = new Set(dialog.files.map((file) => file.path))
+    const nextSelectedPaths = selectedPaths.filter((path) => validPaths.has(path))
+    if (nextSelectedPaths.length === 0) {
+      this.setErrorBanner('Select at least one file to move')
+      return
+    }
+
     this.setState((state) => ({
       ...state,
+      dialog: null,
       moveChanges: {
         phase: 'selecting-destination',
         fromChangeId: dialog.changeId,
-        selectedPaths,
+        selectedPaths: nextSelectedPaths,
       },
     }))
   }
@@ -951,18 +1061,8 @@ class RepoSessionImpl implements RepoSession {
     }))
   }
 
-  private startMoveSingleFile(changeId: string, path: string): void {
-    if (this.state.rebase.phase !== 'idle') return
-
-    this.setErrorBanner(null)
-    this.setState((state) => ({
-      ...state,
-      moveChanges: {
-        phase: 'selecting-destination',
-        fromChangeId: changeId,
-        selectedPaths: [path],
-      },
-    }))
+  private async startMoveSingleFile(changeId: string, path: string): Promise<void> {
+    await this.startMoveChanges(changeId, [path])
   }
 
   private async discardFile(changeId: string, path: string): Promise<void> {
@@ -1098,6 +1198,7 @@ class RepoSessionImpl implements RepoSession {
 
   private selectMoveDestination(changeId: string, description: string): void {
     if (this.state.moveChanges.phase !== 'selecting-destination') return
+    if (this.state.moveChanges.fromChangeId === changeId) return
 
     this.setState((state) => ({
       ...state,

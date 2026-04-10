@@ -26,13 +26,13 @@ export default function CommitRow({ row }: Props) {
   }, [row.isDescribing, row.describeLoading, row.describeValue, row.commit.changeId])
 
   const handleContextMenu = (event: React.MouseEvent) => {
-    if (row.state.isInteractionLocked) return
+    if (row.state.isContextMenuLocked) return
     event.preventDefault()
     setContextMenu({ x: event.clientX, y: event.clientY })
   }
 
   const handleBookmarkContextMenu = (event: React.MouseEvent, bookmark: BookmarkRef) => {
-    if (row.state.isInteractionLocked || bookmark.isRemote) return
+    if (row.state.isContextMenuLocked || bookmark.isRemote) return
     event.preventDefault()
     event.stopPropagation()
     setBookmarkContextMenu({ x: event.clientX, y: event.clientY, bookmark })
@@ -52,7 +52,7 @@ export default function CommitRow({ row }: Props) {
     row.state.isMoveChangesMode && 'graph-row--rebase-target',
   ].filter(Boolean).join(' ')
 
-  const isAnyMoveMode = row.state.isRebaseMode || row.state.isMoveChangesMode
+  const isAnyMoveMode = row.state.isRebaseMode || row.state.isMoveChangesMode || !!row.moveSelection
 
   return (
     <div>
@@ -127,7 +127,7 @@ export default function CommitRow({ row }: Props) {
         </div>
       )}
 
-      {row.isExpanded && !row.state.isInteractionLocked && !row.isDescribing && (
+      {row.state.showFileList && (
         <div className="graph-row graph-row--file-list">
           <SvgGraphCell graphChars={row.graphChars} laneColors={row.laneColors} lineOnly />
           <FileList
@@ -136,6 +136,7 @@ export default function CommitRow({ row }: Props) {
             actionsDisabled={row.actionsDisabled}
             onDiscardFile={row.actions.onDiscardFile}
             onMoveFile={row.actions.onMoveSingleFile}
+            moveSelection={row.moveSelection}
           />
         </div>
       )}
@@ -199,12 +200,6 @@ export default function CommitRow({ row }: Props) {
               label: 'Squash into parent',
               disabled: row.commit.isImmutable,
               onClick: row.actions.onSquashStart,
-            },
-            { type: 'separator' as const },
-            {
-              label: 'Move changes from here',
-              disabled: row.commit.isImmutable || row.commit.isEmpty,
-              onClick: row.actions.onMoveChangesStart,
             },
             {
               label: 'Rebase this subtree',

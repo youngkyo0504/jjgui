@@ -21,6 +21,14 @@ export interface InlineActionPanelViewModel {
   onCancel?(): void
 }
 
+export interface MoveSelectionViewModel {
+  selectedPaths: string[]
+  notice?: string | null
+  onSelectionChange(paths: string[]): void
+  onContinue(): void
+  onCancel(): void
+}
+
 export interface CommitRowViewModel {
   key: string
   graphChars: string
@@ -34,6 +42,7 @@ export interface CommitRowViewModel {
   describeLoading: boolean
   files: ChangedFile[]
   filesLoading: boolean
+  moveSelection: MoveSelectionViewModel | null
   actionsDisabled: boolean
   inlinePanel: InlineActionPanelViewModel | null
   state: {
@@ -44,7 +53,8 @@ export interface CommitRowViewModel {
     isMoveChangesDestination: boolean
     isRebaseMode: boolean
     isMoveChangesMode: boolean
-    isInteractionLocked: boolean
+    isContextMenuLocked: boolean
+    showFileList: boolean
   }
   actions: {
     onRowClick(): void
@@ -58,7 +68,6 @@ export interface CommitRowViewModel {
     onBookmarkRename(name: string): void
     onSplitStart(): void
     onSquashStart(): void
-    onMoveChangesStart(): void
     onRebaseStart(): void
     onMoveSingleFile(path: string): void
     onDiscardFile(path: string): void
@@ -233,15 +242,21 @@ function buildBookmarkModal(snapshot: RepoSnapshot, commands: RepoCommands): Rep
 
 function buildFileSelectModal(snapshot: RepoSnapshot, commands: RepoCommands): RepoScreenModel['fileSelectModal'] {
   const dialog = snapshot.dialog
-  if (!dialog || dialog.kind !== 'file-select') return null
+  if (!dialog || dialog.kind !== 'file-select' || dialog.mode !== 'split') return null
 
   return {
-    title: dialog.mode === 'split' ? 'Split: 새 커밋으로 빼낼 파일 선택' : 'Move changes: 이동할 파일 선택',
+    title: 'Split: 새 커밋으로 빼낼 파일 선택',
     files: dialog.files,
-    minUnselected: dialog.mode === 'split' ? 1 : 0,
+    minUnselected: 1,
     onSubmit: (paths) => { void commands.submitFileSelection(paths) },
     onCancel: commands.dismissDialog,
   }
+}
+
+function getMoveChangesFileSelectDialog(
+  dialog: RepoDialog | null,
+): Extract<RepoDialog, { kind: 'file-select'; mode: 'move-changes' }> | null {
+  return dialog?.kind === 'file-select' && dialog.mode === 'move-changes' ? dialog : null
 }
 
 function buildInlinePanel(
@@ -317,6 +332,8 @@ function buildInlinePanel(
 }
 
 function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowView[] {
+  const moveSelectionDialog = getMoveChangesFileSelectDialog(snapshot.dialog)
+
   return snapshot.rows.map((row, index) => {
     if (row.type !== 'commit' || !row.commit) {
       return {
@@ -331,14 +348,22 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
     const isSource = snapshot.rebase.sourceChangeId === commit.changeId
     const isDescendant = snapshot.rebase.descendants?.has(commit.changeId) ?? false
     const isInSubtree = isSource || isDescendant
+    const isMoveSelectionSource = moveSelectionDialog?.changeId === commit.changeId
     const isRebaseMode = snapshot.rebase.phase === 'source-selected' || snapshot.rebase.phase === 'confirming'
     const isMoveChangesMode = snapshot.moveChanges.phase === 'selecting-destination' || snapshot.moveChanges.phase === 'confirming'
-    const isInteractionLocked = snapshot.rebase.phase !== 'idle' || snapshot.moveChanges.phase !== 'idle'
+    const isBusyInteraction = snapshot.rebase.phase !== 'idle' || snapshot.moveChanges.phase !== 'idle'
+    const isContextMenuLocked = isBusyInteraction || !!moveSelectionDialog
+    const isMoveChangesSource = snapshot.moveChanges.fromChangeId === commit.changeId
+    const rowMoveSelectionDialog = isMoveSelectionSource ? moveSelectionDialog : null
     const visibleBookmarks = snapshot.showRemoteBookmarks
       ? commit.bookmarks
       : commit.bookmarks.filter((bookmark) => !bookmark.isRemote)
     const descriptionResource = snapshot.resources.descriptions[commit.changeId]
     const fileResource = snapshot.resources.files[commit.changeId]
+    const files = rowMoveSelectionDialog?.files ?? fileResource?.files ?? []
+    const showFileList = snapshot.expandedChangeIds.has(commit.changeId)
+      && snapshot.describingChangeId !== commit.changeId
+      && (!isBusyInteraction || !!rowMoveSelectionDialog)
 
     return {
       type: 'commit',
@@ -353,19 +378,29 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
         isDescribing: snapshot.describingChangeId === commit.changeId,
         describeValue: descriptionResource?.value ?? '',
         describeLoading: snapshot.describingChangeId === commit.changeId && descriptionResource?.status === 'loading',
-        files: fileResource?.files ?? [],
+        files,
         filesLoading: fileResource?.status === 'loading',
-        actionsDisabled: commit.isImmutable || isInteractionLocked,
+        moveSelection: rowMoveSelectionDialog
+          ? {
+              selectedPaths: rowMoveSelectionDialog.selectedPaths,
+              notice: rowMoveSelectionDialog.notice ?? null,
+              onSelectionChange: (paths) => commands.setMoveChangesSelection(paths),
+              onContinue: () => { void commands.submitFileSelection(rowMoveSelectionDialog.selectedPaths) },
+              onCancel: commands.dismissDialog,
+            }
+          : null,
+        actionsDisabled: commit.isImmutable || isContextMenuLocked,
         inlinePanel: buildInlinePanel(snapshot, commit, commands),
         state: {
           isSource,
           isDescendant,
-          isDisabledTarget: isRebaseMode && isInSubtree,
+          isDisabledTarget: (isRebaseMode && isInSubtree) || (isMoveChangesMode && isMoveChangesSource),
           isDestination: snapshot.rebase.destinationChangeId === commit.changeId,
           isMoveChangesDestination: snapshot.moveChanges.toChangeId === commit.changeId,
           isRebaseMode,
           isMoveChangesMode,
-          isInteractionLocked,
+          isContextMenuLocked,
+          showFileList,
         },
         actions: {
           onRowClick: () => commands.handleRowClick(commit.changeId, commit.description),
@@ -379,9 +414,8 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
           onBookmarkRename: (name) => commands.openBookmarkRename(name),
           onSplitStart: () => { void commands.startSplit(commit.changeId) },
           onSquashStart: () => commands.startSquash(commit.changeId, commit.description, commit.parents[0] ?? ''),
-          onMoveChangesStart: () => { void commands.startMoveChanges(commit.changeId) },
           onRebaseStart: () => commands.startRebase(commit.changeId, commit.description),
-          onMoveSingleFile: (path) => commands.startMoveSingleFile(commit.changeId, path),
+          onMoveSingleFile: (path) => { void commands.startMoveSingleFile(commit.changeId, path) },
           onDiscardFile: (path) => { void commands.discardFile(commit.changeId, path) },
           onPushBookmark: (bookmark) => { void commands.startPushBookmark(bookmark) },
           onPushBookmarkSubtree: (bookmark) => commands.startPushBookmarkSubtree(bookmark),
@@ -470,6 +504,7 @@ function buildScreenModel(snapshot: RepoSnapshot, commands: RepoCommands): RepoS
   const hasRemoteBookmarks = snapshot.rows.some(
     (row) => row.type === 'commit' && row.commit?.bookmarks.some((bookmark) => bookmark.isRemote),
   )
+  const inlineMoveSelectionOpen = getMoveChangesFileSelectDialog(snapshot.dialog) !== null
 
   return {
     appError: snapshot.appError,
@@ -480,7 +515,8 @@ function buildScreenModel(snapshot: RepoSnapshot, commands: RepoCommands): RepoS
       fetchLabel: snapshot.fetchState.phase === 'executing' ? 'Fetching...' : 'Fetch',
       fetchDisabled: snapshot.fetchState.phase === 'executing'
         || snapshot.rebase.phase !== 'idle'
-        || snapshot.moveChanges.phase !== 'idle',
+        || snapshot.moveChanges.phase !== 'idle'
+        || inlineMoveSelectionOpen,
       onToggleRemoteBookmarks: commands.toggleRemoteBookmarks,
       onFetch: () => { void commands.fetchAll() },
       operationsChip: buildOperationsChip(snapshot, commands),
