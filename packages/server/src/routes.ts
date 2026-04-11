@@ -1,4 +1,29 @@
-import { getGraphLog, getChangedFiles, editCommit, newCommit, rebaseCommit, restoreOperation, getFullDescription, describeCommit, bookmarkCreate, bookmarkMove, bookmarkDelete, bookmarkRename, bookmarkList, bookmarkSet, splitCommit, squashCommit, discardFileChanges, moveChanges, getRemotes, pushBookmark, fetchAllRemotes, getOperationLog } from './jj'
+import {
+  getGraphLog,
+  getChangedFiles,
+  getCommitFileContents,
+  getCommitFileDiff,
+  editCommit,
+  newCommit,
+  rebaseCommit,
+  restoreOperation,
+  getFullDescription,
+  describeCommit,
+  bookmarkCreate,
+  bookmarkMove,
+  bookmarkDelete,
+  bookmarkRename,
+  bookmarkList,
+  bookmarkSet,
+  splitCommit,
+  squashCommit,
+  discardFileChanges,
+  moveChanges,
+  getRemotes,
+  pushBookmark,
+  fetchAllRemotes,
+  getOperationLog,
+} from './jj'
 
 // cwd별 SSE 클라이언트 관리
 const sseClients = new Map<string, Set<ReadableStreamDefaultController>>()
@@ -51,6 +76,36 @@ export async function handleRequest(req: Request): Promise<Response> {
     const changeId = url.pathname.slice('/api/show/'.length)
     try {
       return Response.json(await getChangedFiles(cwd, changeId))
+    } catch (e) {
+      return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // GET /api/commit-diff/:changeId?cwd=...&path=...
+  if (req.method === 'GET' && url.pathname.startsWith('/api/commit-diff/')) {
+    const cwd = getCwd(url)
+    const path = url.searchParams.get('path')
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    if (!path) return Response.json({ error: 'path required' }, { status: 400 })
+
+    const changeId = url.pathname.slice('/api/commit-diff/'.length)
+    try {
+      return Response.json(await getCommitFileDiff(cwd, changeId, path))
+    } catch (e) {
+      return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // GET /api/commit-file-content/:changeId?cwd=...&path=...
+  if (req.method === 'GET' && url.pathname.startsWith('/api/commit-file-content/')) {
+    const cwd = getCwd(url)
+    const path = url.searchParams.get('path')
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    if (!path) return Response.json({ error: 'path required' }, { status: 400 })
+
+    const changeId = url.pathname.slice('/api/commit-file-content/'.length)
+    try {
+      return Response.json(await getCommitFileContents(cwd, changeId, path))
     } catch (e) {
       return Response.json({ error: String(e) }, { status: 500 })
     }

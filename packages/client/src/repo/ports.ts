@@ -1,5 +1,13 @@
 import type { GraphRow } from '../types'
-import type { ChangedFile, FetchRemoteResult, OperationLogEntry, OperationResult, PushScope } from './types'
+import type {
+  ChangedFile,
+  CommitFileContents,
+  CommitFileDiff,
+  FetchRemoteResult,
+  OperationLogEntry,
+  OperationResult,
+  PushScope,
+} from './types'
 
 export interface BookmarkSetInput {
   name: string
@@ -22,6 +30,8 @@ export interface RepoApiPort {
   loadOperations(cwd: string): Promise<OperationLogEntry[]>
   loadDescription(cwd: string, changeId: string): Promise<string>
   loadChangedFiles(cwd: string, changeId: string): Promise<ChangedFile[]>
+  loadCommitDiff(cwd: string, changeId: string, path: string): Promise<CommitFileDiff>
+  loadCommitFileContent(cwd: string, changeId: string, path: string): Promise<CommitFileContents>
   loadBookmarks(cwd: string): Promise<string[]>
   loadRemotes(cwd: string): Promise<string[]>
 

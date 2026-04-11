@@ -1,3 +1,6 @@
+import { useEffect, useMemo, useState } from 'react'
+import type { CommitInfo } from './types'
+import CommitDiffScreen from './components/CommitDiffScreen'
 import LogView from './components/LogView'
 import BookmarkModal from './components/BookmarkModal'
 import SetBookmarkModal from './components/SetBookmarkModal'
@@ -7,13 +10,40 @@ import ErrorBanner from './components/ErrorBanner'
 import OperationDrawer from './components/OperationDrawer'
 import DragFloatingLabel from './components/DragFloatingLabel'
 import { useRepoScreen } from './repo/useRepoScreen'
+import { parseAppRoute } from './utils/commitDiffRoute'
 import './components/styles.css'
 
 export default function App() {
+  const [route, setRoute] = useState(() => parseAppRoute(window.location.search))
   const cwd = new URLSearchParams(window.location.search).get('cwd') ?? ''
   const screen = useRepoScreen(cwd)
 
+  useEffect(() => {
+    const syncRoute = () => setRoute(parseAppRoute(window.location.search))
+    window.addEventListener('popstate', syncRoute)
+    return () => window.removeEventListener('popstate', syncRoute)
+  }, [])
+
+  const commits = useMemo(
+    () => screen.logRows.flatMap((row) => (row.type === 'commit' ? [row.row.commit] : [])) as CommitInfo[],
+    [screen.logRows],
+  )
+
   if (screen.appError) return <div className="app-error">Error: {screen.appError}</div>
+
+  if (route.view === 'commit-diff') {
+    return (
+      <div className="app app--commit-diff">
+        {screen.errorBanner && (
+          <ErrorBanner
+            message={screen.errorBanner.message}
+            onClose={screen.errorBanner.onClose}
+          />
+        )}
+        <CommitDiffScreen cwd={cwd} route={route} commits={commits} />
+      </div>
+    )
+  }
 
   return (
     <div className="app">

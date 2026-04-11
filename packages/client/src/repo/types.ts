@@ -4,6 +4,19 @@ export interface ChangedFile {
   isConflict: boolean
 }
 
+export interface CommitFileDiff {
+  path: string
+  oldPath?: string
+  patch: string
+  isMerge: boolean
+  canExpandContext: boolean
+}
+
+export interface CommitFileContents {
+  oldContent: string | null
+  newContent: string | null
+}
+
 export type OperationKind =
   | 'rebase'
   | 'move-changes'

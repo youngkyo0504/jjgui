@@ -37,6 +37,19 @@ export interface ChangedFile {
   isConflict: boolean
 }
 
+export interface CommitFileDiff {
+  path: string
+  oldPath?: string
+  patch: string
+  isMerge: boolean
+  canExpandContext: boolean
+}
+
+export interface CommitFileContents {
+  oldContent: string | null
+  newContent: string | null
+}
+
 export interface RemoteFetchResult {
   remote: string
   ok: boolean
@@ -342,6 +355,79 @@ export async function getChangedFiles(cwd: string, changeId: string): Promise<Ch
   }
 
   return files
+}
+
+async function getParentChangeIds(cwd: string, changeId: string): Promise<string[]> {
+  const result = await $`jj log --no-graph -r ${changeId} -T 'parents.map(|p| p.change_id().short()).join(" ")'`.cwd(cwd).text()
+  return result.trim().split(/\s+/).filter(Boolean)
+}
+
+function parseGitPatchPaths(patch: string): { path: string; oldPath?: string } | null {
+  const oldMatch = patch.match(/^--- (?:(?:a\/)(.+)|\/dev\/null)$/m)
+  const newMatch = patch.match(/^\+\+\+ (?:(?:b\/)(.+)|\/dev\/null)$/m)
+
+  const oldPath = oldMatch?.[1]
+  const newPath = newMatch?.[1]
+  const path = newPath ?? oldPath
+  if (!path) return null
+
+  return {
+    path,
+    oldPath,
+  }
+}
+
+async function getFileContentAtRevision(cwd: string, revision: string, path: string): Promise<string | null> {
+  try {
+    return await $`jj file show -r ${revision} ${path}`.cwd(cwd).text()
+  } catch (error: any) {
+    const message = formatCommandError(error)
+    if (message.includes(`No such path: ${path}`)) {
+      return null
+    }
+    throw new Error(message)
+  }
+}
+
+export async function getCommitFileDiff(cwd: string, changeId: string, path: string): Promise<CommitFileDiff> {
+  const [patch, parentIds] = await Promise.all([
+    $`jj diff -r ${changeId} --git ${path}`.cwd(cwd).text(),
+    getParentChangeIds(cwd, changeId),
+  ])
+
+  const patchPaths = parseGitPatchPaths(patch)
+
+  return {
+    path: patchPaths?.path ?? path,
+    oldPath: patchPaths?.oldPath,
+    patch,
+    isMerge: parentIds.length > 1,
+    canExpandContext: parentIds.length === 1,
+  }
+}
+
+export async function getCommitFileContents(cwd: string, changeId: string, path: string): Promise<CommitFileContents> {
+  const parentIds = await getParentChangeIds(cwd, changeId)
+  if (parentIds.length !== 1) {
+    return {
+      oldContent: null,
+      newContent: null,
+    }
+  }
+
+  const parentChangeId = parentIds[0]
+  const changedFile = (await getChangedFiles(cwd, changeId)).find((file) => file.path === path)
+  const status = changedFile?.status ?? 'M'
+
+  const [oldContent, newContent] = await Promise.all([
+    status === 'A' ? Promise.resolve(null) : getFileContentAtRevision(cwd, parentChangeId, path),
+    status === 'D' ? Promise.resolve(null) : getFileContentAtRevision(cwd, changeId, path),
+  ])
+
+  return {
+    oldContent,
+    newContent,
+  }
 }
 
 async function getConflictPaths(cwd: string, changeId: string): Promise<Set<string>> {

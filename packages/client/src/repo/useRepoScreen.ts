@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { BookmarkRef, CommitInfo } from '../types'
 import { formatRelativeTime } from '../utils/format'
+import { openCommitDiffRoute } from '../utils/commitDiffRoute'
 import { createRepoApp } from './createRepoApp'
 import { createEventSourceRepoEvents } from './eventSourceRepoEvents'
 import { createHttpRepoApi } from './httpRepoApi'
@@ -90,6 +91,7 @@ export interface CommitRowViewModel {
     onRebaseStart(): void
     onFileDragStart(path: string, pointer: DragPointer): void
     onMoveSingleFile(path: string): void
+    onViewFileDiff(path: string): void
     onDiscardFile(path: string): void
     onPushBookmark(bookmark: string): void
     onPushBookmarkSubtree(bookmark: string): void
@@ -508,6 +510,7 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
           onRebaseStart: () => commands.startRebase(commit.changeId, commit.description),
           onFileDragStart: (path, pointer) => commands.startFileDrag(commit.changeId, [path], pointer),
           onMoveSingleFile: (path) => { void commands.startMoveSingleFile(commit.changeId, path) },
+          onViewFileDiff: (path) => openCommitDiffRoute(commit.changeId, path),
           onDiscardFile: (path) => { void commands.discardFile(commit.changeId, path) },
           onPushBookmark: (bookmark) => { void commands.startPushBookmark(bookmark) },
           onPushBookmarkSubtree: (bookmark) => commands.startPushBookmarkSubtree(bookmark),

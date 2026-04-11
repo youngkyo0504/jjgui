@@ -167,6 +167,7 @@ export default function CommitRow({ row }: Props) {
             onDragCancel={row.actions.onDragCancel}
             onDiscardFile={row.actions.onDiscardFile}
             onMoveFile={row.actions.onMoveSingleFile}
+            onViewDiff={row.actions.onViewFileDiff}
             moveSelection={row.moveSelection}
           />
         </div>

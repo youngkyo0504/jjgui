@@ -18,6 +18,7 @@ interface Props {
   onDragCancel: () => void
   onDiscardFile: (path: string) => void
   onMoveFile: (path: string) => void
+  onViewDiff: (path: string) => void
   moveSelection: MoveSelectionViewModel | null
 }
 
@@ -86,6 +87,7 @@ export default function FileList({
   onDragCancel,
   onDiscardFile,
   onMoveFile,
+  onViewDiff,
   moveSelection,
 }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: ChangedFile } | null>(null)
@@ -197,6 +199,11 @@ export default function FileList({
               label: '파일 선택해서 다른 커밋으로 옮기기',
               disabled: actionsDisabled,
               onClick: () => onMoveFile(contextMenu.file.path),
+            },
+            {
+              label: 'Diff 보기',
+              disabled: actionsDisabled,
+              onClick: () => onViewDiff(contextMenu.file.path),
             },
           ]}
           onClose={() => setContextMenu(null)}

@@ -1,13 +1,22 @@
 import type { GraphRow } from '../types'
 import type { RepoApiPort } from './ports'
-import type { ChangedFile, FetchRemoteResult, OperationLogEntry, OperationResult, PushScope } from './types'
+import type {
+  ChangedFile,
+  CommitFileContents,
+  CommitFileDiff,
+  FetchRemoteResult,
+  OperationLogEntry,
+  OperationResult,
+  PushScope,
+} from './types'
 
 interface JsonObject {
   [key: string]: unknown
 }
 
 function buildUrl(path: string, cwd: string): string {
-  return `${path}?cwd=${encodeURIComponent(cwd)}`
+  const separator = path.includes('?') ? '&' : '?'
+  return `${path}${separator}cwd=${encodeURIComponent(cwd)}`
 }
 
 async function readResponseData(res: Response): Promise<unknown> {
@@ -72,6 +81,14 @@ export function createHttpRepoApi(): RepoApiPort {
 
     loadChangedFiles(cwd, changeId) {
       return requestJson<ChangedFile[]>(`/api/show/${changeId}`, cwd)
+    },
+
+    loadCommitDiff(cwd, changeId, path) {
+      return requestJson<CommitFileDiff>(`/api/commit-diff/${changeId}?path=${encodeURIComponent(path)}`, cwd)
+    },
+
+    loadCommitFileContent(cwd, changeId, path) {
+      return requestJson<CommitFileContents>(`/api/commit-file-content/${changeId}?path=${encodeURIComponent(path)}`, cwd)
     },
 
     async loadBookmarks(cwd) {
