@@ -31,6 +31,10 @@ function makeChangedFile(path: string, status: string, isConflict = false): Chan
   return { path, status, isConflict }
 }
 
+function makePointer(x = 10, y = 10) {
+  return { x, y }
+}
+
 function createFakeEvents() {
   let onRefresh: (() => void) | null = null
 
@@ -128,6 +132,55 @@ test('rebase flow computes descendants and ignores subtree destinations', async 
   session.commands.selectRebaseDestination('target', 'target')
   expect(session.getSnapshot().rebase.phase).toBe('confirming')
   expect(session.getSnapshot().rebase.destinationChangeId).toBe('target')
+  session.dispose()
+})
+
+test('rebase drag previews descendants, rejects subtree targets, and drops into confirming state', async () => {
+  const rows = [
+    makeCommitRow('root'),
+    makeCommitRow('source', ['root']),
+    makeCommitRow('child', ['source']),
+    makeCommitRow('leaf', ['child']),
+    makeCommitRow('target', ['root']),
+  ]
+  const session = createRepoApp({
+    api: createFakeApi({ loadLog: async () => rows }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  session.commands.startRebaseDrag('source', 'source', makePointer())
+
+  let snapshot = session.getSnapshot()
+  expect(snapshot.dragInteraction).toMatchObject({
+    kind: 'rebase',
+    sourceChangeId: 'source',
+    targetValidity: 'none',
+  })
+  expect(snapshot.dragInteraction?.kind === 'rebase' && snapshot.dragInteraction.descendants.has('child')).toBe(true)
+
+  session.commands.updateDrag(makePointer(14, 18), 'child', 'child')
+  snapshot = session.getSnapshot()
+  expect(snapshot.dragInteraction).toMatchObject({
+    hoveredTargetChangeId: 'child',
+    targetValidity: 'invalid',
+  })
+
+  session.commands.updateDrag(makePointer(18, 22), 'target', 'target')
+  snapshot = session.getSnapshot()
+  expect(snapshot.dragInteraction).toMatchObject({
+    hoveredTargetChangeId: 'target',
+    targetValidity: 'valid',
+  })
+
+  session.commands.dropDrag()
+
+  expect(session.getSnapshot().dragInteraction).toBeNull()
+  expect(session.getSnapshot().rebase).toMatchObject({
+    phase: 'confirming',
+    sourceChangeId: 'source',
+    destinationChangeId: 'target',
+  })
   session.dispose()
 })
 
@@ -239,6 +292,39 @@ test('inline move selection continues into destination flow and moves all select
   session.dispose()
 })
 
+test('file drag drops directly into move confirmation without opening selection dialog', async () => {
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => [makeCommitRow('source'), makeCommitRow('target')],
+    }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  session.commands.startFileDrag('source', ['a.ts'], makePointer())
+  session.commands.updateDrag(makePointer(16, 20), 'source', 'source')
+
+  expect(session.getSnapshot().dragInteraction).toMatchObject({
+    kind: 'move-files',
+    sourceChangeId: 'source',
+    targetValidity: 'invalid',
+  })
+
+  session.commands.updateDrag(makePointer(20, 24), 'target', 'target')
+  session.commands.dropDrag()
+
+  expect(session.getSnapshot().dragInteraction).toBeNull()
+  expect(session.getSnapshot().moveChanges).toEqual({
+    phase: 'confirming',
+    fromChangeId: 'source',
+    selectedPaths: ['a.ts'],
+    toChangeId: 'target',
+    toDescription: 'target',
+  })
+  expect(session.getSnapshot().dialog).toBeNull()
+  session.dispose()
+})
+
 test('cancelInteraction closes inline move selection without entering moveChanges mode', async () => {
   const files: ChangedFile[] = [makeChangedFile('a.ts', 'A')]
   const session = createRepoApp({
@@ -256,6 +342,27 @@ test('cancelInteraction closes inline move selection without entering moveChange
 
   expect(session.getSnapshot().dialog).toBeNull()
   expect(session.getSnapshot().moveChanges.phase).toBe('idle')
+  session.dispose()
+})
+
+test('cancelInteraction clears active drag preview state', async () => {
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => [makeCommitRow('source'), makeCommitRow('target')],
+    }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  session.commands.startRebaseDrag('source', 'source', makePointer())
+  session.commands.updateDrag(makePointer(12, 16), 'target', 'target')
+
+  expect(session.getSnapshot().dragInteraction).not.toBeNull()
+
+  session.commands.cancelInteraction()
+
+  expect(session.getSnapshot().dragInteraction).toBeNull()
+  expect(session.getSnapshot().rebase.phase).toBe('idle')
   session.dispose()
 })
 

@@ -4,6 +4,8 @@ import type { GraphRow } from '../types'
 import type { RepoApiPort, RepoEventsPort } from './ports'
 import type {
   ChangedFile,
+  DragInteractionState,
+  DragPointer,
   FetchState,
   MoveChangesState,
   OperationLogEntry,
@@ -69,6 +71,7 @@ export interface RepoSnapshot {
   appError: string | null
   errorBanner: string | null
   showRemoteBookmarks: boolean
+  dragInteraction: DragInteractionState | null
   rebase: RebaseState
   moveChanges: MoveChangesState
   fetchState: FetchState
@@ -97,6 +100,11 @@ export interface RepoCommands {
   dismissDialog(): void
   dismissPushToast(): void
   cancelInteraction(): void
+  startRebaseDrag(changeId: string, description: string, pointer: DragPointer): void
+  startFileDrag(changeId: string, paths: string[], pointer: DragPointer): void
+  updateDrag(pointer: DragPointer, targetChangeId?: string, targetDescription?: string): void
+  dropDrag(): void
+  cancelDrag(): void
   handleRowClick(changeId: string, description: string): void
   edit(changeId: string): Promise<void>
   createChild(changeId: string): Promise<void>
@@ -165,6 +173,7 @@ function initialSnapshot(cwd: string): RepoSnapshot {
     appError: null,
     errorBanner: null,
     showRemoteBookmarks: false,
+    dragInteraction: null,
     rebase: idleRebaseState(),
     moveChanges: idleMoveChangesState(),
     fetchState: idleFetchState(),
@@ -211,6 +220,11 @@ class RepoSessionImpl implements RepoSession {
     dismissDialog: () => this.dismissDialog(),
     dismissPushToast: () => this.dismissPushToast(),
     cancelInteraction: () => this.cancelInteraction(),
+    startRebaseDrag: (changeId, description, pointer) => this.startRebaseDrag(changeId, description, pointer),
+    startFileDrag: (changeId, paths, pointer) => this.startFileDrag(changeId, paths, pointer),
+    updateDrag: (pointer, targetChangeId, targetDescription) => this.updateDrag(pointer, targetChangeId, targetDescription),
+    dropDrag: () => this.dropDrag(),
+    cancelDrag: () => this.cancelDrag(),
     handleRowClick: (changeId, description) => this.handleRowClick(changeId, description),
     edit: (changeId) => this.edit(changeId),
     createChild: (changeId) => this.createChild(changeId),
@@ -305,6 +319,10 @@ class RepoSessionImpl implements RepoSession {
   }
 
   private cancelInteraction(): void {
+    if (this.state.dragInteraction) {
+      this.cancelDrag()
+      return
+    }
     if (isMoveChangesFileSelectDialog(this.state.dialog)) {
       this.dismissDialog()
       return
@@ -321,6 +339,121 @@ class RepoSessionImpl implements RepoSession {
     this.setState((state) => ({
       ...state,
       showRemoteBookmarks: !state.showRemoteBookmarks,
+    }))
+  }
+
+  private canStartDrag(): boolean {
+    if (this.state.dragInteraction) return false
+    if (this.state.dialog) return false
+    if (this.state.rebase.phase !== 'idle') return false
+    if (this.state.moveChanges.phase !== 'idle') return false
+    return true
+  }
+
+  private startRebaseDrag(changeId: string, description: string, pointer: DragPointer): void {
+    if (!this.canStartDrag()) return
+
+    const descendants = getDescendants(changeId, buildChildrenMap(this.state.rows))
+    this.setState((state) => ({
+      ...state,
+      dragInteraction: {
+        kind: 'rebase',
+        sourceChangeId: changeId,
+        sourceDescription: description,
+        descendants,
+        pointer,
+        targetValidity: 'none',
+      },
+    }))
+  }
+
+  private startFileDrag(changeId: string, paths: string[], pointer: DragPointer): void {
+    if (!this.canStartDrag()) return
+
+    const selectedPaths = Array.from(new Set(paths)).filter(Boolean)
+    if (selectedPaths.length === 0) return
+
+    this.setState((state) => ({
+      ...state,
+      dragInteraction: {
+        kind: 'move-files',
+        sourceChangeId: changeId,
+        selectedPaths,
+        pointer,
+        targetValidity: 'none',
+      },
+    }))
+  }
+
+  private updateDrag(pointer: DragPointer, targetChangeId?: string, targetDescription?: string): void {
+    const dragInteraction = this.state.dragInteraction
+    if (!dragInteraction) return
+
+    let targetValidity: DragInteractionState['targetValidity'] = 'none'
+    if (targetChangeId) {
+      if (dragInteraction.kind === 'rebase') {
+        const isSource = dragInteraction.sourceChangeId === targetChangeId
+        const isDescendant = dragInteraction.descendants.has(targetChangeId)
+        targetValidity = isSource || isDescendant ? 'invalid' : 'valid'
+      } else {
+        targetValidity = dragInteraction.sourceChangeId === targetChangeId ? 'invalid' : 'valid'
+      }
+    }
+
+    this.setState((state) => ({
+      ...state,
+      dragInteraction: {
+        ...dragInteraction,
+        pointer,
+        hoveredTargetChangeId: targetChangeId,
+        hoveredTargetDescription: targetDescription,
+        targetValidity,
+      },
+    }))
+  }
+
+  private dropDrag(): void {
+    const dragInteraction = this.state.dragInteraction
+    if (!dragInteraction) return
+
+    if (!dragInteraction.hoveredTargetChangeId || dragInteraction.targetValidity !== 'valid') {
+      this.cancelDrag()
+      return
+    }
+
+    if (dragInteraction.kind === 'rebase') {
+      this.setState((state) => ({
+        ...state,
+        dragInteraction: null,
+        rebase: {
+          phase: 'confirming',
+          sourceChangeId: dragInteraction.sourceChangeId,
+          sourceDescription: dragInteraction.sourceDescription,
+          destinationChangeId: dragInteraction.hoveredTargetChangeId,
+          destinationDescription: dragInteraction.hoveredTargetDescription,
+          descendants: dragInteraction.descendants,
+        },
+      }))
+      return
+    }
+
+    this.setState((state) => ({
+      ...state,
+      dragInteraction: null,
+      moveChanges: {
+        phase: 'confirming',
+        fromChangeId: dragInteraction.sourceChangeId,
+        selectedPaths: dragInteraction.selectedPaths,
+        toChangeId: dragInteraction.hoveredTargetChangeId,
+        toDescription: dragInteraction.hoveredTargetDescription,
+      },
+    }))
+  }
+
+  private cancelDrag(): void {
+    this.setState((state) => ({
+      ...state,
+      dragInteraction: null,
     }))
   }
 
@@ -741,6 +874,8 @@ class RepoSessionImpl implements RepoSession {
   }
 
   private handleRowClick(changeId: string, description: string): void {
+    if (this.state.dragInteraction) return
+
     if (this.state.rebase.phase === 'source-selected') {
       this.selectRebaseDestination(changeId, description)
       return

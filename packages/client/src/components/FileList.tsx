@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
+import type { MouseEvent } from 'react'
 import ContextMenu from './ContextMenu'
+import { usePointerThresholdDrag } from './usePointerThresholdDrag'
 import type { ChangedFile } from '../repo/types'
+import type { DragPointer } from '../repo/types'
 import type { MoveSelectionViewModel } from '../repo/useRepoScreen'
 
 interface Props {
@@ -8,12 +11,83 @@ interface Props {
   loading: boolean
   actionsDisabled: boolean
   readOnly: boolean
+  dragSourcePaths: string[]
+  onFileDragStart: (path: string, pointer: DragPointer) => void
+  onDragMove: (pointer: DragPointer, targetChangeId?: string, targetDescription?: string) => void
+  onDragDrop: () => void
+  onDragCancel: () => void
   onDiscardFile: (path: string) => void
   onMoveFile: (path: string) => void
   moveSelection: MoveSelectionViewModel | null
 }
 
-export default function FileList({ files, loading, actionsDisabled, readOnly, onDiscardFile, onMoveFile, moveSelection }: Props) {
+interface DraggableFileItemProps {
+  file: ChangedFile
+  actionsDisabled: boolean
+  readOnly: boolean
+  isDragSource: boolean
+  onFileDragStart: (path: string, pointer: DragPointer) => void
+  onDragMove: (pointer: DragPointer, targetChangeId?: string, targetDescription?: string) => void
+  onDragDrop: () => void
+  onDragCancel: () => void
+  onContextMenu(event: MouseEvent<HTMLDivElement>): void
+}
+
+function DraggableFileItem({
+  file,
+  actionsDisabled,
+  readOnly,
+  isDragSource,
+  onFileDragStart,
+  onDragMove,
+  onDragDrop,
+  onDragCancel,
+  onContextMenu,
+}: DraggableFileItemProps) {
+  const handleFilePointerDown = usePointerThresholdDrag({
+    disabled: actionsDisabled || readOnly,
+    onDragStart: (pointer) => onFileDragStart(file.path, pointer),
+    onDragMove: (pointer, target) => onDragMove(pointer, target?.changeId, target?.description),
+    onDragEnd: (pointer, target) => {
+      onDragMove(pointer, target?.changeId, target?.description)
+      onDragDrop()
+    },
+    onDragCancel,
+  })
+
+  return (
+    <div
+      className={[
+        'file-list-item',
+        file.isConflict && 'file-list-item--conflict',
+        readOnly && 'file-list-item--readonly',
+        isDragSource && 'file-list-item--drag-source',
+      ].filter(Boolean).join(' ')}
+      title={file.path}
+      onPointerDown={handleFilePointerDown}
+      onContextMenu={onContextMenu}
+    >
+      <span className={`file-status file-status--${file.status}`}>{file.status}</span>
+      <span className="file-path">{file.path}</span>
+      {file.isConflict && <span className="file-conflict-badge">conflict</span>}
+    </div>
+  )
+}
+
+export default function FileList({
+  files,
+  loading,
+  actionsDisabled,
+  readOnly,
+  dragSourcePaths,
+  onFileDragStart,
+  onDragMove,
+  onDragDrop,
+  onDragCancel,
+  onDiscardFile,
+  onMoveFile,
+  moveSelection,
+}: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: ChangedFile } | null>(null)
 
   useEffect(() => {
@@ -91,25 +165,23 @@ export default function FileList({ files, loading, actionsDisabled, readOnly, on
         <div className="file-list-note">Conflict 파일은 터미널에서 해결하세요.</div>
       )}
       {files.map((file) => (
-        <div
+        <DraggableFileItem
           key={file.path}
-          className={[
-            'file-list-item',
-            file.isConflict && 'file-list-item--conflict',
-            readOnly && 'file-list-item--readonly',
-          ].filter(Boolean).join(' ')}
-          title={file.path}
+          file={file}
+          actionsDisabled={actionsDisabled}
+          readOnly={readOnly}
+          isDragSource={dragSourcePaths.includes(file.path)}
+          onFileDragStart={onFileDragStart}
+          onDragMove={onDragMove}
+          onDragDrop={onDragDrop}
+          onDragCancel={onDragCancel}
           onContextMenu={(event) => {
             if (actionsDisabled || readOnly) return
             event.preventDefault()
             event.stopPropagation()
             setContextMenu({ x: event.clientX, y: event.clientY, file })
           }}
-        >
-          <span className={`file-status file-status--${file.status}`}>{file.status}</span>
-          <span className="file-path">{file.path}</span>
-          {file.isConflict && <span className="file-conflict-badge">conflict</span>}
-        </div>
+        />
       ))}
       {contextMenu && (
         <ContextMenu

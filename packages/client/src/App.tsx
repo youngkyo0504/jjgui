@@ -5,6 +5,7 @@ import FileSelectModal from './components/FileSelectModal'
 import ConfirmModal from './components/ConfirmModal'
 import ErrorBanner from './components/ErrorBanner'
 import OperationDrawer from './components/OperationDrawer'
+import DragFloatingLabel from './components/DragFloatingLabel'
 import { useRepoScreen } from './repo/useRepoScreen'
 import './components/styles.css'
 
@@ -49,6 +50,7 @@ export default function App() {
       )}
 
       <LogView rows={screen.logRows} />
+      {screen.dragPreview && <DragFloatingLabel preview={screen.dragPreview} />}
       <OperationDrawer
         isOpen={screen.operationsDrawer.isOpen}
         items={screen.operationsDrawer.items}

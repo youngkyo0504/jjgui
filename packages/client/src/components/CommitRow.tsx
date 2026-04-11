@@ -3,6 +3,7 @@ import SvgGraphCell from './SvgGraphCell'
 import Badge from './Badge'
 import FileList from './FileList'
 import ContextMenu from './ContextMenu'
+import { usePointerThresholdDrag } from './usePointerThresholdDrag'
 import { formatRelativeTime } from '../utils/format'
 import type { BookmarkRef } from '../types'
 import type { CommitRowViewModel } from '../repo/useRepoScreen'
@@ -38,6 +39,17 @@ export default function CommitRow({ row }: Props) {
     setBookmarkContextMenu({ x: event.clientX, y: event.clientY, bookmark })
   }
 
+  const handleCommitPointerDown = usePointerThresholdDrag({
+    disabled: row.actionsDisabled,
+    onDragStart: row.actions.onCommitDragStart,
+    onDragMove: (pointer, target) => row.actions.onDragMove(pointer, target?.changeId, target?.description),
+    onDragEnd: (_pointer, target) => {
+      row.actions.onDragMove(_pointer, target?.changeId, target?.description)
+      row.actions.onDragDrop()
+    },
+    onDragCancel: row.actions.onDragCancel,
+  })
+
   const rowClass = [
     'graph-row',
     'graph-row--commit',
@@ -50,15 +62,28 @@ export default function CommitRow({ row }: Props) {
     row.state.isMoveChangesDestination && 'graph-row--rebase-destination',
     row.state.isRebaseMode && !row.state.isSource && !row.state.isDescendant && 'graph-row--rebase-target',
     row.state.isMoveChangesMode && 'graph-row--rebase-target',
+    row.state.isDragSource && 'graph-row--drag-source',
+    row.state.isDragDescendant && 'graph-row--drag-descendant',
+    row.state.isDragHoverTarget && 'graph-row--drag-target',
+    row.state.isDragInvalidTarget && 'graph-row--drag-invalid',
   ].filter(Boolean).join(' ')
 
   const isAnyMoveMode = row.state.isRebaseMode || row.state.isMoveChangesMode || !!row.moveSelection
+  const commitDropTargetProps = {
+    'data-commit-drop-target': 'true',
+    'data-change-id': row.commit.changeId,
+    'data-description': row.commit.description,
+  } as const
 
   return (
     <div>
       <div className={rowClass} onClick={row.actions.onRowClick} onContextMenu={handleContextMenu}>
         <SvgGraphCell graphChars={row.graphChars} laneColors={row.laneColors} />
-        <div className="commit-info">
+        <div
+          className="commit-info"
+          {...commitDropTargetProps}
+          onPointerDown={handleCommitPointerDown}
+        >
           {row.commit.isWorkingCopy && <Badge label="Editing" variant="editing" />}
           {row.commit.workspaces.map((workspace) => (
             <Badge key={workspace} label={workspace} variant="workspace" />
@@ -98,7 +123,7 @@ export default function CommitRow({ row }: Props) {
       </div>
 
       {row.inlinePanel && (
-        <div className="graph-row graph-row--file-list">
+        <div className="graph-row graph-row--file-list" {...commitDropTargetProps}>
           <SvgGraphCell graphChars={row.graphChars} laneColors={row.laneColors} lineOnly />
           <div className={`inline-action-panel inline-action-panel--${row.inlinePanel.tone}`}>
             <div className="inline-action-panel-title">{row.inlinePanel.title}</div>
@@ -128,13 +153,18 @@ export default function CommitRow({ row }: Props) {
       )}
 
       {row.state.showFileList && (
-        <div className="graph-row graph-row--file-list">
+        <div className="graph-row graph-row--file-list" {...commitDropTargetProps}>
           <SvgGraphCell graphChars={row.graphChars} laneColors={row.laneColors} lineOnly />
           <FileList
             files={row.files}
             loading={row.filesLoading}
             actionsDisabled={row.actionsDisabled}
             readOnly={row.state.isReadOnlyFileList}
+            dragSourcePaths={row.dragSourcePaths}
+            onFileDragStart={row.actions.onFileDragStart}
+            onDragMove={row.actions.onDragMove}
+            onDragDrop={row.actions.onDragDrop}
+            onDragCancel={row.actions.onDragCancel}
             onDiscardFile={row.actions.onDiscardFile}
             onMoveFile={row.actions.onMoveSingleFile}
             moveSelection={row.moveSelection}
@@ -143,7 +173,7 @@ export default function CommitRow({ row }: Props) {
       )}
 
       {row.isDescribing && (
-        <div className="graph-row graph-row--file-list">
+        <div className="graph-row graph-row--file-list" {...commitDropTargetProps}>
           <SvgGraphCell graphChars={row.graphChars} laneColors={row.laneColors} lineOnly />
           <div className="describe-editor">
             {row.describeLoading ? (

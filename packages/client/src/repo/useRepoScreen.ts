@@ -7,6 +7,7 @@ import { createHttpRepoApi } from './httpRepoApi'
 import type { RepoCommands, RepoDialog, RepoSnapshot } from './createRepoApp'
 import type {
   ChangedFile,
+  DragPointer,
   OperationKind,
   OperationStatus,
   PushResult,
@@ -29,6 +30,12 @@ export interface MoveSelectionViewModel {
   onCancel(): void
 }
 
+export interface DragPreviewViewModel {
+  x: number
+  y: number
+  label: string
+}
+
 export interface CommitRowViewModel {
   key: string
   graphChars: string
@@ -43,6 +50,7 @@ export interface CommitRowViewModel {
   files: ChangedFile[]
   filesLoading: boolean
   moveSelection: MoveSelectionViewModel | null
+  dragSourcePaths: string[]
   actionsDisabled: boolean
   inlinePanel: InlineActionPanelViewModel | null
   state: {
@@ -53,12 +61,20 @@ export interface CommitRowViewModel {
     isMoveChangesDestination: boolean
     isRebaseMode: boolean
     isMoveChangesMode: boolean
+    isDragSource: boolean
+    isDragDescendant: boolean
+    isDragHoverTarget: boolean
+    isDragInvalidTarget: boolean
     isContextMenuLocked: boolean
     isReadOnlyFileList: boolean
     showFileList: boolean
   }
   actions: {
     onRowClick(): void
+    onCommitDragStart(pointer: DragPointer): void
+    onDragMove(pointer: DragPointer, targetChangeId?: string, targetDescription?: string): void
+    onDragDrop(): void
+    onDragCancel(): void
     onEdit(): void
     onNew(): void
     onDescribeStart(): void
@@ -70,6 +86,7 @@ export interface CommitRowViewModel {
     onSplitStart(): void
     onSquashStart(): void
     onRebaseStart(): void
+    onFileDragStart(path: string, pointer: DragPointer): void
     onMoveSingleFile(path: string): void
     onDiscardFile(path: string): void
     onPushBookmark(bookmark: string): void
@@ -117,6 +134,7 @@ export interface RepoScreenModel {
     loading: boolean
     onClose(): void
   }
+  dragPreview: DragPreviewViewModel | null
   logRows: LogRowView[]
   bookmarkModal:
     | { kind: 'rename'; initialName: string; onSubmit(name: string): void; onCancel(): void }
@@ -169,6 +187,53 @@ function getMoveChangesExecutingTitle(snapshot: RepoSnapshot): string {
       return 'Squashing commit...'
     default:
       return 'Moving changes...'
+  }
+}
+
+function findCommitDescription(snapshot: RepoSnapshot, changeId?: string): string | undefined {
+  if (!changeId) return undefined
+
+  const row = snapshot.rows.find((item) => item.type === 'commit' && item.commit?.changeId === changeId)
+  return row?.type === 'commit' ? row.commit?.description : undefined
+}
+
+function formatCommitDetail(changeId?: string, description?: string): string {
+  if (!changeId) return '-'
+  return `${changeId}${description ? ` "${description}"` : ''}`
+}
+
+function buildMoveChangesDetailLines(snapshot: RepoSnapshot): string[] {
+  const fromDescription = findCommitDescription(snapshot, snapshot.moveChanges.fromChangeId)
+  const details = [
+    `from: ${formatCommitDetail(snapshot.moveChanges.fromChangeId, fromDescription)}`,
+    `destination: ${formatCommitDetail(snapshot.moveChanges.toChangeId, snapshot.moveChanges.toDescription)}`,
+  ]
+
+  const selectedPaths = snapshot.moveChanges.selectedPaths ?? []
+  if (selectedPaths.length > 0) {
+    details.push(...selectedPaths.map((path) => `path: ${path}`))
+  }
+
+  return details
+}
+
+function buildDragPreview(snapshot: RepoSnapshot): DragPreviewViewModel | null {
+  const drag = snapshot.dragInteraction
+  if (!drag || drag.targetValidity !== 'valid' || !drag.hoveredTargetChangeId) return null
+
+  if (drag.kind === 'rebase') {
+    return {
+      x: drag.pointer.x,
+      y: drag.pointer.y,
+      label: `Rebase onto ${drag.hoveredTargetChangeId}`,
+    }
+  }
+
+  const fileCount = drag.selectedPaths.length
+  return {
+    x: drag.pointer.x,
+    y: drag.pointer.y,
+    label: `Move ${fileCount} file${fileCount === 1 ? '' : 's'} into ${drag.hoveredTargetChangeId}`,
   }
 }
 
@@ -294,10 +359,7 @@ function buildInlinePanel(
 
   if (snapshot.moveChanges.toChangeId === commit.changeId) {
     const fileCount = snapshot.moveChanges.selectedPaths?.length ?? 0
-    const details = [
-      `from: ${snapshot.moveChanges.fromChangeId ?? '-'}`,
-      `destination: ${snapshot.moveChanges.toChangeId}${snapshot.moveChanges.toDescription ? ` "${snapshot.moveChanges.toDescription}"` : ''}`,
-    ]
+    const details = buildMoveChangesDetailLines(snapshot)
 
     if (snapshot.moveChanges.phase === 'confirming') {
       return {
@@ -334,6 +396,7 @@ function buildInlinePanel(
 
 function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowView[] {
   const moveSelectionDialog = getMoveChangesFileSelectDialog(snapshot.dialog)
+  const dragInteraction = snapshot.dragInteraction
 
   return snapshot.rows.map((row, index) => {
     if (row.type !== 'commit' || !row.commit) {
@@ -353,7 +416,13 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
     const isRebaseMode = snapshot.rebase.phase === 'source-selected' || snapshot.rebase.phase === 'confirming'
     const isMoveChangesMode = snapshot.moveChanges.phase === 'selecting-destination' || snapshot.moveChanges.phase === 'confirming'
     const isBusyInteraction = snapshot.rebase.phase !== 'idle' || snapshot.moveChanges.phase !== 'idle'
-    const isContextMenuLocked = isBusyInteraction || !!moveSelectionDialog
+    const isDragSource = dragInteraction?.sourceChangeId === commit.changeId
+    const isDragDescendant = dragInteraction?.kind === 'rebase'
+      ? dragInteraction.descendants.has(commit.changeId)
+      : false
+    const isDragHoverTarget = dragInteraction?.hoveredTargetChangeId === commit.changeId && dragInteraction.targetValidity === 'valid'
+    const isDragInvalidTarget = dragInteraction?.hoveredTargetChangeId === commit.changeId && dragInteraction.targetValidity === 'invalid'
+    const isContextMenuLocked = isBusyInteraction || !!moveSelectionDialog || !!dragInteraction
     const isMoveChangesSource = snapshot.moveChanges.fromChangeId === commit.changeId
     const rowMoveSelectionDialog = isMoveSelectionSource ? moveSelectionDialog : null
     const visibleBookmarks = snapshot.showRemoteBookmarks
@@ -381,6 +450,9 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
         describeLoading: snapshot.describingChangeId === commit.changeId && descriptionResource?.status === 'loading',
         files,
         filesLoading: fileResource?.status === 'loading',
+        dragSourcePaths: dragInteraction?.kind === 'move-files' && dragInteraction.sourceChangeId === commit.changeId
+          ? dragInteraction.selectedPaths
+          : [],
         moveSelection: rowMoveSelectionDialog
           ? {
               selectedPaths: rowMoveSelectionDialog.selectedPaths,
@@ -400,12 +472,20 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
           isMoveChangesDestination: snapshot.moveChanges.toChangeId === commit.changeId,
           isRebaseMode,
           isMoveChangesMode,
+          isDragSource,
+          isDragDescendant,
+          isDragHoverTarget,
+          isDragInvalidTarget,
           isContextMenuLocked,
           isReadOnlyFileList: commit.hasConflict,
           showFileList,
         },
         actions: {
           onRowClick: () => commands.handleRowClick(commit.changeId, commit.description),
+          onCommitDragStart: (pointer) => commands.startRebaseDrag(commit.changeId, commit.description, pointer),
+          onDragMove: (pointer, targetChangeId, targetDescription) => commands.updateDrag(pointer, targetChangeId, targetDescription),
+          onDragDrop: () => commands.dropDrag(),
+          onDragCancel: () => commands.cancelDrag(),
           onEdit: () => { void commands.edit(commit.changeId) },
           onNew: () => { void commands.createChild(commit.changeId) },
           onDescribeStart: () => commands.startDescribe(commit.changeId),
@@ -417,6 +497,7 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
           onSplitStart: () => { void commands.startSplit(commit.changeId) },
           onSquashStart: () => commands.startSquash(commit.changeId, commit.description, commit.parents[0] ?? ''),
           onRebaseStart: () => commands.startRebase(commit.changeId, commit.description),
+          onFileDragStart: (path, pointer) => commands.startFileDrag(commit.changeId, [path], pointer),
           onMoveSingleFile: (path) => { void commands.startMoveSingleFile(commit.changeId, path) },
           onDiscardFile: (path) => { void commands.discardFile(commit.changeId, path) },
           onPushBookmark: (bookmark) => { void commands.startPushBookmark(bookmark) },
@@ -535,6 +616,7 @@ function buildScreenModel(snapshot: RepoSnapshot, commands: RepoCommands): RepoS
       loading: snapshot.resources.operations.status === 'loading',
       onClose: commands.closeOperationDrawer,
     },
+    dragPreview: buildDragPreview(snapshot),
     logRows: buildLogRows(snapshot, commands),
     bookmarkModal: buildBookmarkModal(snapshot, commands),
     fileSelectModal: buildFileSelectModal(snapshot, commands),

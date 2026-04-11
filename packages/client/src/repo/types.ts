@@ -66,6 +66,35 @@ export interface MoveChangesState {
 
 export type FetchPhase = 'idle' | 'executing'
 
+export interface DragPointer {
+  x: number
+  y: number
+}
+
+export type DragTargetValidity = 'none' | 'valid' | 'invalid'
+
+interface DragInteractionBase {
+  pointer: DragPointer
+  hoveredTargetChangeId?: string
+  hoveredTargetDescription?: string
+  targetValidity: DragTargetValidity
+}
+
+export interface RebaseDragInteraction extends DragInteractionBase {
+  kind: 'rebase'
+  sourceChangeId: string
+  sourceDescription?: string
+  descendants: Set<string>
+}
+
+export interface MoveFilesDragInteraction extends DragInteractionBase {
+  kind: 'move-files'
+  sourceChangeId: string
+  selectedPaths: string[]
+}
+
+export type DragInteractionState = RebaseDragInteraction | MoveFilesDragInteraction
+
 export interface FetchRemoteResult {
   remote: string
   ok: boolean
