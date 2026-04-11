@@ -16,7 +16,7 @@ interface PointerThresholdDragOptions {
   onDragCancel?(): void
 }
 
-function suppressNextClick() {
+function suppressNextClick(): () => void {
   const handler = (event: MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
@@ -24,6 +24,9 @@ function suppressNextClick() {
   }
 
   window.addEventListener('click', handler, true)
+  return () => {
+    window.removeEventListener('click', handler, true)
+  }
 }
 
 function getCommitDropTarget(pointer: DragPointer): CommitDropTarget | null {
@@ -48,9 +51,11 @@ export function usePointerThresholdDrag({
   onDragCancel,
 }: PointerThresholdDragOptions) {
   const cleanupRef = useRef<(() => void) | null>(null)
+  const clearSuppressedClickRef = useRef<(() => void) | null>(null)
 
   useEffect(() => () => {
     cleanupRef.current?.()
+    clearSuppressedClickRef.current?.()
   }, [])
 
   return useCallback((event: ReactPointerEvent<HTMLElement>) => {
@@ -78,7 +83,8 @@ export function usePointerThresholdDrag({
 
       if (!dragging && Math.hypot(dx, dy) >= threshold) {
         dragging = true
-        suppressNextClick()
+        clearSuppressedClickRef.current?.()
+        clearSuppressedClickRef.current = suppressNextClick()
         document.body.classList.add('drag-interaction-active')
         onDragStart(pointer)
       }
@@ -98,6 +104,10 @@ export function usePointerThresholdDrag({
 
       if (!dragging) return
 
+      setTimeout(() => {
+        clearSuppressedClickRef.current?.()
+        clearSuppressedClickRef.current = null
+      }, 0)
       upEvent.preventDefault()
       onDragEnd(pointer, target)
     }
@@ -107,7 +117,13 @@ export function usePointerThresholdDrag({
 
       const didDrag = dragging
       finish()
-      if (didDrag) onDragCancel?.()
+      if (didDrag) {
+        setTimeout(() => {
+          clearSuppressedClickRef.current?.()
+          clearSuppressedClickRef.current = null
+        }, 0)
+        onDragCancel?.()
+      }
     }
 
     const handleKeyDown = (keyEvent: KeyboardEvent) => {
@@ -115,7 +131,12 @@ export function usePointerThresholdDrag({
       const didDrag = dragging
       finish()
       if (didDrag) {
-        suppressNextClick()
+        clearSuppressedClickRef.current?.()
+        clearSuppressedClickRef.current = suppressNextClick()
+        setTimeout(() => {
+          clearSuppressedClickRef.current?.()
+          clearSuppressedClickRef.current = null
+        }, 0)
         keyEvent.preventDefault()
         keyEvent.stopPropagation()
         onDragCancel?.()
