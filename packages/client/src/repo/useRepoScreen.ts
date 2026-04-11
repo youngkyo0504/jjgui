@@ -662,6 +662,16 @@ export function useRepoScreen(cwd: string): RepoScreenModel {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [session])
 
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      void session.commands.refresh()
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [session])
+
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   return useMemo(() => buildScreenModel(snapshot, session.commands), [snapshot, session])
