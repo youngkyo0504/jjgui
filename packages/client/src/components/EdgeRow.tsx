@@ -4,12 +4,19 @@ import SvgGraphCell from './SvgGraphCell'
 interface Props {
   graphChars: string
   laneColors?: string[]
+  previousGraphChars?: string
+  nextGraphChars?: string
 }
 
-export default function EdgeRow({ graphChars, laneColors }: Props) {
+export default function EdgeRow({ graphChars, laneColors, previousGraphChars, nextGraphChars }: Props) {
   return (
     <div className="graph-row">
-      <SvgGraphCell graphChars={graphChars} laneColors={laneColors} />
+      <SvgGraphCell
+        graphChars={graphChars}
+        laneColors={laneColors}
+        previousGraphChars={previousGraphChars}
+        nextGraphChars={nextGraphChars}
+      />
     </div>
   )
 }

@@ -9,6 +9,8 @@ const STROKE_WIDTH = 2
 interface Props {
   graphChars: string
   laneColors?: string[]
+  previousGraphChars?: string
+  nextGraphChars?: string
   lineOnly?: boolean
 }
 
@@ -23,12 +25,15 @@ function renderCell(cell: GraphCell, index: number, h: number): React.ReactNode 
 
   switch (cell.type) {
     case 'node': {
+      const connectsUp = cell.connectsUp ?? true
+      const connectsDown = cell.connectsDown ?? true
+
       if (cell.nodeType === 'immutable') {
         const s = DIAMOND_SIZE
         return (
           <g key={index}>
-            <line x1={cx} y1={0} x2={cx} y2={cy - s} stroke={color} strokeWidth={STROKE_WIDTH} />
-            <line x1={cx} y1={cy + s} x2={cx} y2={h} stroke={color} strokeWidth={STROKE_WIDTH} />
+            {connectsUp && <line x1={cx} y1={0} x2={cx} y2={cy - s} stroke={color} strokeWidth={STROKE_WIDTH} />}
+            {connectsDown && <line x1={cx} y1={cy + s} x2={cx} y2={h} stroke={color} strokeWidth={STROKE_WIDTH} />}
             <path d={`M${cx},${cy - s} L${cx + s},${cy} L${cx},${cy + s} L${cx - s},${cy} Z`} fill={color} />
           </g>
         )
@@ -37,8 +42,8 @@ function renderCell(cell: GraphCell, index: number, h: number): React.ReactNode 
         const wcColor = 'var(--green)'
         return (
           <g key={index}>
-            <line x1={cx} y1={0} x2={cx} y2={cy - NODE_RADIUS} stroke={wcColor} strokeWidth={STROKE_WIDTH} />
-            <line x1={cx} y1={cy + NODE_RADIUS} x2={cx} y2={h} stroke={wcColor} strokeWidth={STROKE_WIDTH} />
+            {connectsUp && <line x1={cx} y1={0} x2={cx} y2={cy - NODE_RADIUS} stroke={wcColor} strokeWidth={STROKE_WIDTH} />}
+            {connectsDown && <line x1={cx} y1={cy + NODE_RADIUS} x2={cx} y2={h} stroke={wcColor} strokeWidth={STROKE_WIDTH} />}
             <circle cx={cx} cy={cy} r={NODE_RADIUS + 1} fill={wcColor} />
             <circle cx={cx} cy={cy} r={2} fill="var(--bg)" />
           </g>
@@ -46,8 +51,8 @@ function renderCell(cell: GraphCell, index: number, h: number): React.ReactNode 
       }
       return (
         <g key={index}>
-          <line x1={cx} y1={0} x2={cx} y2={cy - NODE_RADIUS} stroke={color} strokeWidth={STROKE_WIDTH} />
-          <line x1={cx} y1={cy + NODE_RADIUS} x2={cx} y2={h} stroke={color} strokeWidth={STROKE_WIDTH} />
+          {connectsUp && <line x1={cx} y1={0} x2={cx} y2={cy - NODE_RADIUS} stroke={color} strokeWidth={STROKE_WIDTH} />}
+          {connectsDown && <line x1={cx} y1={cy + NODE_RADIUS} x2={cx} y2={h} stroke={color} strokeWidth={STROKE_WIDTH} />}
           <circle cx={cx} cy={cy} r={NODE_RADIUS} fill={color} />
         </g>
       )
@@ -143,8 +148,8 @@ function renderCell(cell: GraphCell, index: number, h: number): React.ReactNode 
   }
 }
 
-export default function SvgGraphCell({ graphChars, laneColors, lineOnly }: Props) {
-  const cells = parseGraphChars(graphChars, laneColors)
+export default function SvgGraphCell({ graphChars, laneColors, previousGraphChars, nextGraphChars, lineOnly }: Props) {
+  const cells = parseGraphChars(graphChars, laneColors, { previousGraphChars, nextGraphChars })
   const width = cells.length * LANE_WIDTH
   const wrapRef = useRef<HTMLDivElement>(null)
   const [h, setH] = useState(28)
@@ -171,6 +176,7 @@ export default function SvgGraphCell({ graphChars, laneColors, lineOnly }: Props
         {lineOnly
           ? cells.map((cell, i) => {
               if (cell.type === 'line' || cell.type === 'node' || cell.type === 'tee-right' || cell.type === 'tee-left') {
+                if (cell.type === 'node' && cell.connectsDown === false) return null
                 const cx = i * LANE_WIDTH + LANE_WIDTH / 2
                 return <line key={i} x1={cx} y1={0} x2={cx} y2={h} stroke={defaultColor(cell.color)} strokeWidth={STROKE_WIDTH} />
               }

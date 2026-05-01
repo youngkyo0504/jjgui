@@ -93,4 +93,41 @@ describe('parseGraphChars', () => {
     const result = parseGraphChars('')
     expect(result).toEqual([])
   })
+
+  test('문맥이 있으면 tip 노드는 아래로만 연결한다', () => {
+    const result = parseGraphChars('○', ['#7aa2f7'], { nextGraphChars: '○' })
+    expect(result).toEqual([
+      { type: 'node', color: '#7aa2f7', nodeType: 'normal', connectsUp: false, connectsDown: true },
+    ])
+  })
+
+  test('문맥이 있으면 중간 노드는 위아래로 연결한다', () => {
+    const result = parseGraphChars('○', ['#7aa2f7'], {
+      previousGraphChars: '○',
+      nextGraphChars: '○',
+    })
+    expect(result).toEqual([
+      { type: 'node', color: '#7aa2f7', nodeType: 'normal', connectsUp: true, connectsDown: true },
+    ])
+  })
+
+  test('문맥이 있으면 끝 노드는 위로만 연결한다', () => {
+    const result = parseGraphChars('○', ['#7aa2f7'], { previousGraphChars: '○' })
+    expect(result).toEqual([
+      { type: 'node', color: '#7aa2f7', nodeType: 'normal', connectsUp: true, connectsDown: false },
+    ])
+  })
+
+  test('사이드 분기의 첫 노드는 위로 연결하지 않고 아래 edge row로만 연결한다', () => {
+    const result = parseGraphChars('│ ○', ['#7aa2f7', '', '#9ece6a'], {
+      previousGraphChars: '○',
+      nextGraphChars: '├─╯',
+    })
+
+    expect(result).toEqual([
+      { type: 'line', color: '#7aa2f7' },
+      { type: 'empty', color: '' },
+      { type: 'node', color: '#9ece6a', nodeType: 'normal', connectsUp: false, connectsDown: true },
+    ])
+  })
 })

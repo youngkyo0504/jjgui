@@ -11,6 +11,13 @@ export interface GraphCell {
   color: string
   nodeType?: NodeType
   horizontalColor?: string
+  connectsUp?: boolean
+  connectsDown?: boolean
+}
+
+export interface GraphParseContext {
+  previousGraphChars?: string
+  nextGraphChars?: string
 }
 
 const NODE_CHARS = new Set(['○', '@', '◆', '◉'])
@@ -18,6 +25,14 @@ const LINE_CHARS = new Set(['│', '┃', '|'])
 const HORIZONTAL_CHARS = new Set(['─', '━', '╶', '╴', '╼', '╾'])
 const ELIDED_CHARS = new Set(['~', '⋮'])
 const SPACE_CHARS = new Set([' '])
+const CONNECTOR_CHARS = new Set([
+  ...NODE_CHARS,
+  ...LINE_CHARS,
+  ...ELIDED_CHARS,
+  '├', '┤', '┬', '┴', '┼',
+  '╯', '╰', '╮', '╭',
+  '┘', '└', '┐', '┌',
+])
 
 function getNodeType(ch: string): NodeType {
   if (ch === '@') return 'working-copy'
@@ -61,7 +76,26 @@ function resolveBranchArmColor(cells: GraphCell[], index: number, step: -1 | 1):
   return findNearestColoredEndpoint(cells, index, step)?.color || cells[index]?.color || ''
 }
 
-export function parseGraphChars(graphChars: string, laneColors: string[] = []): GraphCell[] {
+function getGraphCharAt(graphChars: string | undefined, index: number): string | undefined {
+  if (!graphChars) return undefined
+  return [...graphChars][index]
+}
+
+function hasVerticalConnectionAt(graphChars: string | undefined, index: number): boolean {
+  const ch = getGraphCharAt(graphChars, index)
+  return !!ch && CONNECTOR_CHARS.has(ch)
+}
+
+function getNodeConnections(index: number, context?: GraphParseContext): Pick<GraphCell, 'connectsUp' | 'connectsDown'> {
+  if (!context) return {}
+
+  return {
+    connectsUp: hasVerticalConnectionAt(context.previousGraphChars, index),
+    connectsDown: hasVerticalConnectionAt(context.nextGraphChars, index),
+  }
+}
+
+export function parseGraphChars(graphChars: string, laneColors: string[] = [], context?: GraphParseContext): GraphCell[] {
   const chars = [...graphChars]
   const cells: GraphCell[] = []
   let colorIdx = 0
@@ -72,7 +106,7 @@ export function parseGraphChars(graphChars: string, laneColors: string[] = []): 
     colorIdx++
 
     if (NODE_CHARS.has(ch)) {
-      cells.push({ type: 'node', color, nodeType: getNodeType(ch) })
+      cells.push({ type: 'node', color, nodeType: getNodeType(ch), ...getNodeConnections(i, context) })
     } else if (LINE_CHARS.has(ch)) {
       cells.push({ type: 'line', color })
     } else if (ch === '├' || ch === '┤') {

@@ -40,6 +40,8 @@ export interface CommitRowViewModel {
   key: string
   graphChars: string
   laneColors?: string[]
+  previousGraphChars?: string
+  nextGraphChars?: string
   commit: CommitInfo
   visibleBookmarks: BookmarkRef[]
   pushingBookmarks: ReadonlySet<string>
@@ -96,8 +98,8 @@ export interface CommitRowViewModel {
 
 export type LogRowView =
   | { type: 'commit'; row: CommitRowViewModel }
-  | { type: 'edge'; key: string; graphChars: string; laneColors?: string[] }
-  | { type: 'elided'; key: string; graphChars: string; laneColors?: string[] }
+  | { type: 'edge'; key: string; graphChars: string; laneColors?: string[]; previousGraphChars?: string; nextGraphChars?: string }
+  | { type: 'elided'; key: string; graphChars: string; laneColors?: string[]; previousGraphChars?: string; nextGraphChars?: string }
 
 export interface OperationItemViewModel {
   key: string
@@ -399,12 +401,17 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
   const dragInteraction = snapshot.dragInteraction
 
   return snapshot.rows.map((row, index) => {
+    const previousGraphChars = snapshot.rows[index - 1]?.graphChars
+    const nextGraphChars = snapshot.rows[index + 1]?.graphChars
+
     if (row.type !== 'commit' || !row.commit) {
       return {
         type: row.type,
         key: `${row.type}-${index}`,
         graphChars: row.graphChars,
         laneColors: row.laneColors,
+        previousGraphChars,
+        nextGraphChars,
       }
     }
 
@@ -441,6 +448,8 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
         key: `${commit.changeId}-${index}`,
         graphChars: row.graphChars,
         laneColors: row.laneColors,
+        previousGraphChars,
+        nextGraphChars,
         commit,
         visibleBookmarks,
         pushingBookmarks: snapshot.pushingBookmarks,

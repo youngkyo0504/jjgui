@@ -74,6 +74,14 @@ const LANE_COLORS = [
   '#bb9af7', '#2ac3de', '#ff9e64', '#73daca',
 ]
 
+const NODE_CHARS = new Set(['○', '◆', '@', '◉', '*'])
+const VERTICAL_CHARS = new Set(['│', '┃', '|'])
+const ELIDED_CHARS = new Set(['~', '⋮'])
+const TEE_DOWN_CHARS = new Set(['├', '┤', '┬', '┼'])
+const BRANCH_START_CHARS = new Set(['╮', '╭', '┐', '┌'])
+const BRANCH_END_CHARS = new Set(['╯', '╰', '┘', '└'])
+const HORIZONTAL_CHARS = new Set(['─', '━', '╶', '╴', '╼', '╾'])
+
 const TEMPLATE = [
   'change_id.short()',
   '"\x1f"',
@@ -206,23 +214,79 @@ function computeIndent(graphPrefix: string): number {
   return spaces
 }
 
-function computeLaneColors(graphPrefix: string, laneColorMap: Map<number, string>, colorIdx: { val: number }): string[] {
+interface LaneColorState {
+  active: Map<number, string>
+  nextColorIndex: number
+}
+
+function createLaneColorState(): LaneColorState {
+  return {
+    active: new Map(),
+    nextColorIndex: 0,
+  }
+}
+
+function allocateLaneColor(state: LaneColorState): string {
+  const color = LANE_COLORS[state.nextColorIndex % LANE_COLORS.length]
+  state.nextColorIndex++
+  return color
+}
+
+function getOrCreateActiveLaneColor(state: LaneColorState, col: number): string {
+  const existing = state.active.get(col)
+  if (existing) return existing
+
+  const color = allocateLaneColor(state)
+  state.active.set(col, color)
+  return color
+}
+
+function shouldColorGraphChar(ch: string): boolean {
+  return (
+    NODE_CHARS.has(ch) ||
+    VERTICAL_CHARS.has(ch) ||
+    ELIDED_CHARS.has(ch) ||
+    TEE_DOWN_CHARS.has(ch) ||
+    BRANCH_START_CHARS.has(ch) ||
+    BRANCH_END_CHARS.has(ch)
+  )
+}
+
+function continuesToNextRow(ch: string): boolean {
+  return (
+    NODE_CHARS.has(ch) ||
+    VERTICAL_CHARS.has(ch) ||
+    ELIDED_CHARS.has(ch) ||
+    TEE_DOWN_CHARS.has(ch) ||
+    BRANCH_START_CHARS.has(ch)
+  )
+}
+
+function computeLaneColors(graphPrefix: string, state: LaneColorState): string[] {
   const colors: string[] = []
-  let col = 0
-  for (const ch of graphPrefix) {
-    if (ch === ' ') {
+  const nextActive = new Map<number, string>()
+
+  for (const [col, ch] of [...graphPrefix].entries()) {
+    if (ch === ' ' || HORIZONTAL_CHARS.has(ch)) {
       colors.push('')
-      col++
-    } else {
-      if (!laneColorMap.has(col)) {
-        laneColorMap.set(col, LANE_COLORS[colorIdx.val % LANE_COLORS.length])
-        colorIdx.val++
-      }
-      colors.push(laneColorMap.get(col)!)
-      col++
+      continue
+    }
+
+    const color = shouldColorGraphChar(ch) ? getOrCreateActiveLaneColor(state, col) : ''
+    colors.push(color)
+
+    if (color && continuesToNextRow(ch)) {
+      nextActive.set(col, color)
     }
   }
+
+  state.active = nextActive
   return colors
+}
+
+export function computeGraphLaneColorRows(graphPrefixes: string[]): string[][] {
+  const state = createLaneColorState()
+  return graphPrefixes.map((graphPrefix) => computeLaneColors(graphPrefix, state))
 }
 
 export async function getGraphLog(cwd: string): Promise<GraphRow[]> {
@@ -230,15 +294,14 @@ export async function getGraphLog(cwd: string): Promise<GraphRow[]> {
 
   const rows: GraphRow[] = []
   const lines = result.split('\n')
-  const laneColorMap = new Map<number, string>()
-  const colorIdx = { val: 0 }
+  const laneColorState = createLaneColorState()
 
   for (const line of lines) {
     if (line === '') continue
 
     const { graphPrefix, data } = splitGraphAndData(line)
     const indent = computeIndent(graphPrefix)
-    const laneColors = computeLaneColors(graphPrefix, laneColorMap, colorIdx)
+    const laneColors = computeLaneColors(graphPrefix, laneColorState)
 
     if (graphPrefix.includes('~')) {
       rows.push({ graphChars: graphPrefix, type: 'elided', indent, laneColors })

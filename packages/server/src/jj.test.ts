@@ -3,7 +3,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getChangedFiles } from './jj'
+import { computeGraphLaneColorRows, getChangedFiles } from './jj'
 
 const tempDirs: string[] = []
 
@@ -55,5 +55,43 @@ test('getChangedFiles marks conflicted files using `jj resolve --list`', async (
 
   await expect(getChangedFiles(repo.cwd, repo.leftChangeId)).resolves.toEqual([
     { path: 'file.txt', status: 'M', isConflict: true },
+  ])
+})
+
+test('computeGraphLaneColorRows assigns new colors by branch lifetime, not column', () => {
+  expect(computeGraphLaneColorRows([
+    '○  ',
+    '│ ○  ',
+    '├─╯',
+    '○  ',
+    '│ ○  ',
+    '├─╯',
+  ])).toEqual([
+    ['#7aa2f7', '', ''],
+    ['#7aa2f7', '', '#9ece6a', '', ''],
+    ['#7aa2f7', '', '#9ece6a'],
+    ['#7aa2f7', '', ''],
+    ['#7aa2f7', '', '#e0af68', '', ''],
+    ['#7aa2f7', '', '#e0af68'],
+  ])
+})
+
+test('computeGraphLaneColorRows keeps a merge-side branch color until it rejoins', () => {
+  expect(computeGraphLaneColorRows([
+    '@  ',
+    '├─╮',
+    '│ ○  ',
+    '│ │  ',
+    '○ │  ',
+    '├─╯',
+    '○  ',
+  ])).toEqual([
+    ['#7aa2f7', '', ''],
+    ['#7aa2f7', '', '#9ece6a'],
+    ['#7aa2f7', '', '#9ece6a', '', ''],
+    ['#7aa2f7', '', '#9ece6a', '', ''],
+    ['#7aa2f7', '', '#9ece6a', '', ''],
+    ['#7aa2f7', '', '#9ece6a'],
+    ['#7aa2f7', '', ''],
   ])
 })
