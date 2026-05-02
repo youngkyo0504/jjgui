@@ -1,5 +1,5 @@
 import React from 'react'
-import SvgGraphCell from './SvgGraphCell'
+import GraphSlot from './GraphSlot'
 
 interface Props {
   graphChars: string
@@ -8,15 +8,10 @@ interface Props {
   nextGraphChars?: string
 }
 
-export default function ElidedRow({ graphChars, laneColors, previousGraphChars, nextGraphChars }: Props) {
+export default function ElidedRow({ graphChars }: Props) {
   return (
     <div className="graph-row">
-      <SvgGraphCell
-        graphChars={graphChars}
-        laneColors={laneColors}
-        previousGraphChars={previousGraphChars}
-        nextGraphChars={nextGraphChars}
-      />
+      <GraphSlot graphChars={graphChars} />
       <span className="elided-data">(elided revisions)</span>
     </div>
   )

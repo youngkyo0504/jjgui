@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import SvgGraphCell from './SvgGraphCell'
+import GraphSlot from './GraphSlot'
 import Badge from './Badge'
 import FileList from './FileList'
 import ContextMenu from './ContextMenu'
@@ -78,12 +78,7 @@ export default function CommitRow({ row }: Props) {
   return (
     <div>
       <div className={rowClass} onClick={row.actions.onRowClick} onContextMenu={handleContextMenu}>
-        <SvgGraphCell
-          graphChars={row.graphChars}
-          laneColors={row.laneColors}
-          previousGraphChars={row.previousGraphChars}
-          nextGraphChars={row.nextGraphChars}
-        />
+        <GraphSlot graphChars={row.graphChars} />
         <div
           className="commit-info"
           {...commitDropTargetProps}
@@ -129,13 +124,7 @@ export default function CommitRow({ row }: Props) {
 
       {row.inlinePanel && (
         <div className="graph-row graph-row--file-list" {...commitDropTargetProps}>
-          <SvgGraphCell
-            graphChars={row.graphChars}
-            laneColors={row.laneColors}
-            previousGraphChars={row.previousGraphChars}
-            nextGraphChars={row.nextGraphChars}
-            lineOnly
-          />
+          <GraphSlot graphChars={row.graphChars} />
           <div className={`inline-action-panel inline-action-panel--${row.inlinePanel.tone}`}>
             <div className="inline-action-panel-title">{row.inlinePanel.title}</div>
             {row.inlinePanel.details.length > 0 && (
@@ -165,13 +154,7 @@ export default function CommitRow({ row }: Props) {
 
       {row.state.showFileList && (
         <div className="graph-row graph-row--file-list" {...commitDropTargetProps}>
-          <SvgGraphCell
-            graphChars={row.graphChars}
-            laneColors={row.laneColors}
-            previousGraphChars={row.previousGraphChars}
-            nextGraphChars={row.nextGraphChars}
-            lineOnly
-          />
+          <GraphSlot graphChars={row.graphChars} />
           <FileList
             files={row.files}
             loading={row.filesLoading}
@@ -191,13 +174,7 @@ export default function CommitRow({ row }: Props) {
 
       {row.isDescribing && (
         <div className="graph-row graph-row--file-list" {...commitDropTargetProps}>
-          <SvgGraphCell
-            graphChars={row.graphChars}
-            laneColors={row.laneColors}
-            previousGraphChars={row.previousGraphChars}
-            nextGraphChars={row.nextGraphChars}
-            lineOnly
-          />
+          <GraphSlot graphChars={row.graphChars} />
           <div className="describe-editor">
             {row.describeLoading ? (
               <div className="describe-loading">Loading...</div>

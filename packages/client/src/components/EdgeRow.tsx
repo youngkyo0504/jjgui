@@ -1,5 +1,5 @@
 import React from 'react'
-import SvgGraphCell from './SvgGraphCell'
+import GraphSlot from './GraphSlot'
 
 interface Props {
   graphChars: string
@@ -8,15 +8,10 @@ interface Props {
   nextGraphChars?: string
 }
 
-export default function EdgeRow({ graphChars, laneColors, previousGraphChars, nextGraphChars }: Props) {
+export default function EdgeRow({ graphChars }: Props) {
   return (
     <div className="graph-row">
-      <SvgGraphCell
-        graphChars={graphChars}
-        laneColors={laneColors}
-        previousGraphChars={previousGraphChars}
-        nextGraphChars={nextGraphChars}
-      />
+      <GraphSlot graphChars={graphChars} />
     </div>
   )
 }
