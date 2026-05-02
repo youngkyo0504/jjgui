@@ -227,31 +227,18 @@ function computeIndent(graphPrefix: string): number {
   return spaces
 }
 
-interface LaneColorState {
-  active: Map<number, string>
-  nextColorIndex: number
+interface NestingColorState {
+  active: Map<number, number>
 }
 
-function createLaneColorState(): LaneColorState {
+function createNestingColorState(): NestingColorState {
   return {
     active: new Map(),
-    nextColorIndex: 0,
   }
 }
 
-function allocateLaneColor(state: LaneColorState): string {
-  const color = LANE_COLORS[state.nextColorIndex % LANE_COLORS.length]
-  state.nextColorIndex++
-  return color
-}
-
-function getOrCreateActiveLaneColor(state: LaneColorState, col: number): string {
-  const existing = state.active.get(col)
-  if (existing) return existing
-
-  const color = allocateLaneColor(state)
-  state.active.set(col, color)
-  return color
+function colorForDepth(depth: number): string {
+  return LANE_COLORS[depth % LANE_COLORS.length]
 }
 
 function shouldColorGraphChar(ch: string): boolean {
@@ -265,6 +252,10 @@ function shouldColorGraphChar(ch: string): boolean {
   )
 }
 
+function isCurveEndpoint(ch: string | undefined): boolean {
+  return !!ch && (BRANCH_START_CHARS.has(ch) || BRANCH_END_CHARS.has(ch))
+}
+
 function continuesToNextRow(ch: string): boolean {
   return (
     NODE_CHARS.has(ch) ||
@@ -275,21 +266,83 @@ function continuesToNextRow(ch: string): boolean {
   )
 }
 
-function computeLaneColors(graphPrefix: string, state: LaneColorState): string[] {
-  const colors: string[] = []
-  const nextActive = new Map<number, string>()
+function assignCurveRunDepth(chars: string[], start: number, end: number, state: NestingColorState, assigned: Map<number, number>): void {
+  const leftCol = start - 1
+  const rightCol = end + 1
+  const leftCh = chars[leftCol]
+  const rightCh = chars[rightCol]
 
-  for (const [col, ch] of [...graphPrefix].entries()) {
+  if (!isCurveEndpoint(leftCh) || !isCurveEndpoint(rightCh)) return
+
+  const leftDepth = assigned.get(leftCol) ?? state.active.get(leftCol)
+  const rightDepth = assigned.get(rightCol) ?? state.active.get(rightCol)
+
+  if (leftDepth !== undefined && rightDepth === undefined) {
+    assigned.set(rightCol, leftDepth)
+    return
+  }
+
+  if (rightDepth !== undefined && leftDepth === undefined) {
+    assigned.set(leftCol, rightDepth)
+  }
+}
+
+function inferNestedDepth(col: number, assigned: Map<number, number>): number {
+  let nearestLeftDepth: number | undefined
+
+  for (let leftCol = col - 1; leftCol >= 0; leftCol--) {
+    const depth = assigned.get(leftCol)
+    if (depth !== undefined) {
+      nearestLeftDepth = depth
+      break
+    }
+  }
+
+  return nearestLeftDepth !== undefined ? nearestLeftDepth + 1 : 0
+}
+
+function computeLaneColors(graphPrefix: string, state: NestingColorState): string[] {
+  const chars = [...graphPrefix]
+  const colors: string[] = []
+  const assigned = new Map<number, number>()
+  const nextActive = new Map<number, number>()
+
+  for (const [col, ch] of chars.entries()) {
+    if (!shouldColorGraphChar(ch)) continue
+
+    const activeDepth = state.active.get(col)
+    if (activeDepth !== undefined) {
+      assigned.set(col, activeDepth)
+    }
+  }
+
+  for (let col = 0; col < chars.length; col++) {
+    if (!HORIZONTAL_CHARS.has(chars[col])) continue
+
+    const start = col
+    while (col + 1 < chars.length && HORIZONTAL_CHARS.has(chars[col + 1])) {
+      col++
+    }
+
+    assignCurveRunDepth(chars, start, col, state, assigned)
+  }
+
+  for (const [col, ch] of chars.entries()) {
     if (ch === ' ' || HORIZONTAL_CHARS.has(ch)) {
       colors.push('')
       continue
     }
 
-    const color = shouldColorGraphChar(ch) ? getOrCreateActiveLaneColor(state, col) : ''
+    let depth = shouldColorGraphChar(ch) ? assigned.get(col) : undefined
+    if (shouldColorGraphChar(ch) && depth === undefined) {
+      depth = inferNestedDepth(col, assigned)
+      assigned.set(col, depth)
+    }
+    const color = depth !== undefined ? colorForDepth(depth) : ''
     colors.push(color)
 
-    if (color && continuesToNextRow(ch)) {
-      nextActive.set(col, color)
+    if (depth !== undefined && continuesToNextRow(ch)) {
+      nextActive.set(col, depth)
     }
   }
 
@@ -298,7 +351,7 @@ function computeLaneColors(graphPrefix: string, state: LaneColorState): string[]
 }
 
 export function computeGraphLaneColorRows(graphPrefixes: string[]): string[][] {
-  const state = createLaneColorState()
+  const state = createNestingColorState()
   return graphPrefixes.map((graphPrefix) => computeLaneColors(graphPrefix, state))
 }
 
@@ -307,7 +360,7 @@ export async function getGraphLog(cwd: string): Promise<GraphRow[]> {
 
   const rows: GraphRow[] = []
   const lines = result.split('\n')
-  const laneColorState = createLaneColorState()
+  const laneColorState = createNestingColorState()
 
   for (const line of lines) {
     if (line === '') continue

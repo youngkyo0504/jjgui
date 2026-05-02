@@ -100,7 +100,7 @@ test('getChangedFiles marks conflicted files using `jj resolve --list`', async (
   ])
 })
 
-test('computeGraphLaneColorRows assigns new colors by branch lifetime, not column', () => {
+test('computeGraphLaneColorRows assigns colors by nesting depth, not branch lifetime', () => {
   expect(computeGraphLaneColorRows([
     '○  ',
     '│ ○  ',
@@ -113,8 +113,20 @@ test('computeGraphLaneColorRows assigns new colors by branch lifetime, not colum
     ['#7aa2f7', '', '#9ece6a', '', ''],
     ['#7aa2f7', '', '#9ece6a'],
     ['#7aa2f7', '', ''],
-    ['#7aa2f7', '', '#e0af68', '', ''],
-    ['#7aa2f7', '', '#e0af68'],
+    ['#7aa2f7', '', '#9ece6a', '', ''],
+    ['#7aa2f7', '', '#9ece6a'],
+  ])
+})
+
+test('computeGraphLaneColorRows uses deeper colors for nested branches', () => {
+  expect(computeGraphLaneColorRows([
+    '@    ',
+    '│ ○  ',
+    '│ │ ○',
+  ])).toEqual([
+    ['#7aa2f7', '', '', '', ''],
+    ['#7aa2f7', '', '#9ece6a', '', ''],
+    ['#7aa2f7', '', '#9ece6a', '', '#e0af68'],
   ])
 })
 
@@ -134,6 +146,34 @@ test('computeGraphLaneColorRows keeps a merge-side branch color until it rejoins
     ['#7aa2f7', '', '#9ece6a', '', ''],
     ['#7aa2f7', '', '#9ece6a', '', ''],
     ['#7aa2f7', '', '#9ece6a'],
+    ['#7aa2f7', '', ''],
+  ])
+})
+
+test('computeGraphLaneColorRows keeps a flow color when it shifts right', () => {
+  expect(computeGraphLaneColorRows([
+    '○  ',
+    '╰─╮',
+    '  │',
+    '  ○',
+  ])).toEqual([
+    ['#7aa2f7', '', ''],
+    ['#7aa2f7', '', '#7aa2f7'],
+    ['', '', '#7aa2f7'],
+    ['', '', '#7aa2f7'],
+  ])
+})
+
+test('computeGraphLaneColorRows keeps a flow color when it shifts left', () => {
+  expect(computeGraphLaneColorRows([
+    '  ○',
+    '╭─╯',
+    '│  ',
+    '○  ',
+  ])).toEqual([
+    ['', '', '#7aa2f7'],
+    ['#7aa2f7', '', '#7aa2f7'],
+    ['#7aa2f7', '', ''],
     ['#7aa2f7', '', ''],
   ])
 })
