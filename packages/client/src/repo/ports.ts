@@ -1,5 +1,6 @@
 import type { GraphRow } from '../types'
 import type {
+  AbandonScope,
   ChangedFile,
   CommitFileContents,
   CommitFileDiff,
@@ -46,6 +47,7 @@ export interface RepoApiPort {
 
   split(cwd: string, input: { changeId: string; paths: string[] }): Promise<OperationResult>
   squash(cwd: string, changeId: string): Promise<OperationResult>
+  abandon(cwd: string, input: { changeId: string; scope: AbandonScope }): Promise<OperationResult>
   discardFile(cwd: string, input: { changeId: string; path: string }): Promise<OperationResult>
   moveChanges(
     cwd: string,

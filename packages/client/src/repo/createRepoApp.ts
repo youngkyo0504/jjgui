@@ -3,6 +3,7 @@ import { interpretSuccessfulPush } from '../utils/pushFeedback'
 import type { GraphRow } from '../types'
 import type { RepoApiPort, RepoEventsPort } from './ports'
 import type {
+  AbandonScope,
   ChangedFile,
   DragInteractionState,
   DragPointer,
@@ -61,6 +62,7 @@ export type RepoDialog =
   | SplitFileSelectDialog
   | MoveChangesFileSelectDialog
   | { kind: 'confirm'; confirmKind: 'squash'; changeId: string; description: string; parentDescription: string }
+  | { kind: 'confirm'; confirmKind: 'abandon'; changeId: string; description: string; scope: AbandonScope; commitCount: number }
   | { kind: 'confirm'; confirmKind: 'subtree-push'; bookmark: string }
   | { kind: 'confirm'; confirmKind: 'bookmark-backwards'; name: string; changeId: string }
   | { kind: 'remote-select'; bookmark: string; remotes: string[]; scope: PushScope }
@@ -120,6 +122,7 @@ export interface RepoCommands {
   setMoveChangesSelection(selectedPaths: string[]): void
   submitFileSelection(selectedPaths: string[]): Promise<void>
   startSquash(changeId: string, description: string, parentDescription: string): void
+  startAbandon(changeId: string, description: string, scope: AbandonScope): void
   startMoveChanges(changeId: string): Promise<void>
   startMoveSingleFile(changeId: string, path: string): Promise<void>
   discardFile(changeId: string, path: string): Promise<void>
@@ -240,6 +243,7 @@ class RepoSessionImpl implements RepoSession {
     setMoveChangesSelection: (selectedPaths) => this.setMoveChangesSelection(selectedPaths),
     submitFileSelection: (selectedPaths) => this.submitFileSelection(selectedPaths),
     startSquash: (changeId, description, parentDescription) => this.startSquash(changeId, description, parentDescription),
+    startAbandon: (changeId, description, scope) => this.startAbandon(changeId, description, scope),
     startMoveChanges: (changeId) => this.startMoveChanges(changeId),
     startMoveSingleFile: (changeId, path) => this.startMoveSingleFile(changeId, path),
     discardFile: (changeId, path) => this.discardFile(changeId, path),
@@ -520,12 +524,21 @@ class RepoSessionImpl implements RepoSession {
     }))
   }
 
+  private getSubtreeCommits(changeId: string) {
+    const descendants = getDescendants(changeId, buildChildrenMap(this.state.rows))
+    const subtreeIds = new Set([changeId, ...descendants])
+
+    return this.state.rows.flatMap((row) => (
+      row.type === 'commit' && row.commit && subtreeIds.has(row.commit.changeId) ? [row.commit] : []
+    ))
+  }
+
   private findLatestOperation(kind: UndoKind): RecentOperation | null {
     const targetKind = kind === 'rebase' ? 'rebase' : kind === 'moveChanges' ? null : 'fetch'
     if (kind === 'moveChanges') {
       return this.state.recentOperations.find((operation) => (
         operation.status === 'success'
-        && ['move-changes', 'split', 'squash', 'discard-file'].includes(operation.kind)
+        && ['move-changes', 'split', 'squash', 'abandon', 'abandon-subtree', 'discard-file'].includes(operation.kind)
         && !!operation.beforeOpId
       )) ?? null
     }
@@ -1196,6 +1209,38 @@ class RepoSessionImpl implements RepoSession {
     }))
   }
 
+  private startAbandon(changeId: string, description: string, scope: AbandonScope): void {
+    const targetCommits = this.getSubtreeCommits(changeId)
+    const commitsToAbandon = scope === 'subtree'
+      ? targetCommits
+      : targetCommits.filter((commit) => commit.changeId === changeId)
+    if (commitsToAbandon.some((commit) => commit.isWorkingCopy)) {
+      this.setErrorBanner(scope === 'subtree'
+        ? 'Cannot abandon a subtree containing the working copy'
+        : 'Cannot abandon the working copy commit')
+      return
+    }
+
+    if (commitsToAbandon.some((commit) => commit.isImmutable)) {
+      this.setErrorBanner(scope === 'subtree'
+        ? 'Cannot abandon a subtree containing immutable commits'
+        : 'Cannot abandon an immutable commit')
+      return
+    }
+
+    this.setState((state) => ({
+      ...state,
+      dialog: {
+        kind: 'confirm',
+        confirmKind: 'abandon',
+        changeId,
+        description,
+        scope,
+        commitCount: Math.max(commitsToAbandon.length, 1),
+      },
+    }))
+  }
+
   private async startMoveSingleFile(changeId: string, path: string): Promise<void> {
     await this.startMoveChanges(changeId, [path])
   }
@@ -1615,6 +1660,61 @@ class RepoSessionImpl implements RepoSession {
           },
         }))
         this.finishRecentOperation(operationKey, 'success', {
+          beforeOpId: result.beforeOpId,
+          afterOpId: result.afterOpId,
+        })
+        await this.refresh()
+      } catch (error) {
+        this.setState((state) => ({
+          ...state,
+          moveChanges: idleMoveChangesState(),
+        }))
+        this.finishRecentOperation(operationKey, 'failed', {
+          details: String(error),
+        })
+        this.setErrorBanner(String(error))
+      }
+      return
+    }
+
+    if (dialog.confirmKind === 'abandon') {
+      const lastAction = dialog.scope === 'subtree' ? 'abandon-subtree' : 'abandon'
+      const operationTitle = dialog.scope === 'subtree' ? 'Abandoning subtree' : 'Abandoning commit'
+      const operationSummary = dialog.scope === 'subtree'
+        ? `${dialog.changeId} subtree (${dialog.commitCount} commits)`
+        : dialog.changeId
+
+      this.setState((state) => ({
+        ...state,
+        dialog: null,
+        moveChanges: {
+          phase: 'executing',
+          lastAction,
+          fromChangeId: dialog.changeId,
+        },
+      }))
+      const operationKey = this.startRecentOperation(
+        lastAction,
+        operationTitle,
+        operationSummary,
+      )
+
+      try {
+        const result = await this.api.abandon(this.cwd, {
+          changeId: dialog.changeId,
+          scope: dialog.scope,
+        })
+        this.setState((state) => ({
+          ...state,
+          moveChanges: {
+            phase: 'idle',
+            lastAction,
+          },
+        }))
+        this.finishRecentOperation(operationKey, 'success', {
+          summary: dialog.scope === 'subtree'
+            ? `${dialog.commitCount} commits abandoned`
+            : `${dialog.changeId} abandoned`,
           beforeOpId: result.beforeOpId,
           afterOpId: result.afterOpId,
         })

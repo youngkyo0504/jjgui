@@ -17,6 +17,7 @@ import {
   bookmarkSet,
   splitCommit,
   squashCommit,
+  abandonCommit,
   discardFileChanges,
   moveChanges,
   getRemotes,
@@ -287,6 +288,20 @@ export async function handleRequest(req: Request): Promise<Response> {
     try {
       const body = await req.json()
       const result = await squashCommit(cwd, body.changeId)
+      return Response.json({ ok: true, ...result })
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/abandon?cwd=...
+  if (req.method === 'POST' && url.pathname === '/api/abandon') {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    try {
+      const body = await req.json()
+      const scope = body.scope === 'subtree' ? 'subtree' : 'commit'
+      const result = await abandonCommit(cwd, body.changeId, scope)
       return Response.json({ ok: true, ...result })
     } catch (e) {
       return Response.json({ ok: false, error: String(e) }, { status: 500 })

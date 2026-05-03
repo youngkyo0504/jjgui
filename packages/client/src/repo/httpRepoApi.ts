@@ -4,6 +4,7 @@ import type {
   ChangedFile,
   CommitFileContents,
   CommitFileDiff,
+  AbandonScope,
   FetchRemoteResult,
   OperationLogEntry,
   OperationResult,
@@ -127,6 +128,10 @@ export function createHttpRepoApi(): RepoApiPort {
 
     squash(cwd, changeId) {
       return requestJson<OperationResult>('/api/squash', cwd, jsonBody({ changeId }))
+    },
+
+    abandon(cwd, input: { changeId: string; scope: AbandonScope }) {
+      return requestJson<OperationResult>('/api/abandon', cwd, jsonBody(input))
     },
 
     discardFile(cwd, input) {

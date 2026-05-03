@@ -240,6 +240,17 @@ export default function CommitRow({ row }: Props) {
             },
             { type: 'separator' as const },
             {
+              label: 'Abandon commit...',
+              disabled: row.commit.isImmutable || row.commit.isWorkingCopy,
+              onClick: row.actions.onAbandonStart,
+            },
+            {
+              label: 'Abandon subtree...',
+              disabled: row.state.isSubtreeAbandonDisabled,
+              onClick: row.actions.onAbandonSubtreeStart,
+            },
+            { type: 'separator' as const },
+            {
               label: 'Set bookmark',
               onClick: row.actions.onSetBookmark,
             },

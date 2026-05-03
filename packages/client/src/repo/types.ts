@@ -22,6 +22,8 @@ export type OperationKind =
   | 'move-changes'
   | 'split'
   | 'squash'
+  | 'abandon'
+  | 'abandon-subtree'
   | 'discard-file'
   | 'fetch'
   | 'restore'
@@ -54,6 +56,8 @@ export interface OperationResult {
   afterOpId: string
 }
 
+export type AbandonScope = 'commit' | 'subtree'
+
 export type RebasePhase = 'idle' | 'source-selected' | 'confirming' | 'executing'
 
 export interface RebaseState {
@@ -74,7 +78,7 @@ export interface MoveChangesState {
   selectedPaths?: string[]
   toChangeId?: string
   toDescription?: string
-  lastAction?: 'move-changes' | 'split' | 'squash' | 'discard-file'
+  lastAction?: 'move-changes' | 'split' | 'squash' | 'abandon' | 'abandon-subtree' | 'discard-file'
 }
 
 export type FetchPhase = 'idle' | 'executing'

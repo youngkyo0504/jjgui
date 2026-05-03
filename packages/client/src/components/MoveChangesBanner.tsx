@@ -16,6 +16,10 @@ export default function MoveChangesBanner({ moveChanges, onCancel, onConfirm, on
         return '커밋 분할 중...'
       case 'squash':
         return '변경사항 합치는 중...'
+      case 'abandon':
+        return '커밋 버리는 중...'
+      case 'abandon-subtree':
+        return '서브트리 버리는 중...'
       default:
         return '변경사항 이동 중...'
     }
@@ -29,6 +33,10 @@ export default function MoveChangesBanner({ moveChanges, onCancel, onConfirm, on
         return '커밋 분할 완료'
       case 'squash':
         return '변경사항 합치기 완료'
+      case 'abandon':
+        return '커밋 버리기 완료'
+      case 'abandon-subtree':
+        return '서브트리 버리기 완료'
       case 'move-changes':
         return '변경사항 이동 완료'
       default:

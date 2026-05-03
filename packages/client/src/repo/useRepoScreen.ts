@@ -2,6 +2,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { BookmarkRef, CommitInfo } from '../types'
 import { formatRelativeTime } from '../utils/format'
 import { openCommitDiffRoute } from '../utils/commitDiffRoute'
+import { buildChildrenMap, getDescendants } from '../utils/graph'
 import { createRepoApp } from './createRepoApp'
 import { createEventSourceRepoEvents } from './eventSourceRepoEvents'
 import { createHttpRepoApi } from './httpRepoApi'
@@ -70,6 +71,7 @@ export interface CommitRowViewModel {
     isDragInvalidTarget: boolean
     isContextMenuLocked: boolean
     isReadOnlyFileList: boolean
+    isSubtreeAbandonDisabled: boolean
     showFileList: boolean
   }
   actions: {
@@ -88,6 +90,8 @@ export interface CommitRowViewModel {
     onBookmarkRename(name: string): void
     onSplitStart(): void
     onSquashStart(): void
+    onAbandonStart(): void
+    onAbandonSubtreeStart(): void
     onRebaseStart(): void
     onFileDragStart(path: string, pointer: DragPointer): void
     onMoveSingleFile(path: string): void
@@ -170,6 +174,10 @@ function getOperationVerb(kind: OperationKind): string {
       return 'Splitting...'
     case 'squash':
       return 'Squashing...'
+    case 'abandon':
+      return 'Abandoning...'
+    case 'abandon-subtree':
+      return 'Abandoning subtree...'
     case 'discard-file':
       return 'Discarding...'
     case 'fetch':
@@ -189,6 +197,10 @@ function getMoveChangesExecutingTitle(snapshot: RepoSnapshot): string {
       return 'Splitting commit...'
     case 'squash':
       return 'Squashing commit...'
+    case 'abandon':
+      return 'Abandoning commit...'
+    case 'abandon-subtree':
+      return 'Abandoning subtree...'
     default:
       return 'Moving changes...'
   }
@@ -249,6 +261,26 @@ function buildConfirmModal(dialog: RepoDialog | null, commands: RepoCommands): R
       title: 'Squash into parent',
       message: `"${dialog.description || '(no description)'}" -> parent "${dialog.parentDescription || '(no description)'}"`,
       confirmLabel: 'Squash',
+      onConfirm: () => { void commands.confirmDialog() },
+      onCancel: commands.dismissDialog,
+    }
+  }
+
+  if (dialog.confirmKind === 'abandon') {
+    if (dialog.scope === 'subtree') {
+      return {
+        title: 'Abandon subtree?',
+        message: `${dialog.commitCount} commits starting at ${dialog.changeId} "${dialog.description || '(no description)'}" will be removed. Bookmarks on those commits will be deleted.`,
+        confirmLabel: 'Abandon',
+        onConfirm: () => { void commands.confirmDialog() },
+        onCancel: commands.dismissDialog,
+      }
+    }
+
+    return {
+      title: 'Abandon commit?',
+      message: `${dialog.changeId} "${dialog.description || '(no description)'}" will be removed. Descendants may be rebased and conflicts may appear. Bookmarks on this commit will be deleted.`,
+      confirmLabel: 'Abandon',
       onConfirm: () => { void commands.confirmDialog() },
       onCancel: commands.dismissDialog,
     }
@@ -386,7 +418,13 @@ function buildInlinePanel(
   }
 
   if (snapshot.moveChanges.phase === 'executing' && snapshot.moveChanges.fromChangeId === commit.changeId) {
-    if (snapshot.moveChanges.lastAction === 'discard-file' || snapshot.moveChanges.lastAction === 'split' || snapshot.moveChanges.lastAction === 'squash') {
+    if (
+      snapshot.moveChanges.lastAction === 'discard-file'
+      || snapshot.moveChanges.lastAction === 'split'
+      || snapshot.moveChanges.lastAction === 'squash'
+      || snapshot.moveChanges.lastAction === 'abandon'
+      || snapshot.moveChanges.lastAction === 'abandon-subtree'
+    ) {
       return {
         tone: 'running',
         title: getMoveChangesExecutingTitle(snapshot),
@@ -401,6 +439,10 @@ function buildInlinePanel(
 function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowView[] {
   const moveSelectionDialog = getMoveChangesFileSelectDialog(snapshot.dialog)
   const dragInteraction = snapshot.dragInteraction
+  const childrenMap = buildChildrenMap(snapshot.rows)
+  const commitsByChangeId = new Map(snapshot.rows.flatMap((row) => (
+    row.type === 'commit' && row.commit ? [[row.commit.changeId, row.commit] as const] : []
+  )))
 
   return snapshot.rows.map((row, index) => {
     const previousGraphChars = snapshot.rows[index - 1]?.graphChars
@@ -433,6 +475,12 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
     const isDragInvalidTarget = dragInteraction?.hoveredTargetChangeId === commit.changeId && dragInteraction.targetValidity === 'invalid'
     const isContextMenuLocked = isBusyInteraction || !!moveSelectionDialog || !!dragInteraction
     const isMoveChangesSource = snapshot.moveChanges.fromChangeId === commit.changeId
+    const subtreeIds = new Set([commit.changeId, ...getDescendants(commit.changeId, childrenMap)])
+    const subtreeCommits = [...subtreeIds].flatMap((changeId) => {
+      const subtreeCommit = commitsByChangeId.get(changeId)
+      return subtreeCommit ? [subtreeCommit] : []
+    })
+    const isSubtreeAbandonDisabled = subtreeCommits.some((item) => item.isWorkingCopy || item.isImmutable)
     const rowMoveSelectionDialog = isMoveSelectionSource ? moveSelectionDialog : null
     const visibleBookmarks = snapshot.showRemoteBookmarks
       ? commit.bookmarks
@@ -489,6 +537,7 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
           isDragInvalidTarget,
           isContextMenuLocked,
           isReadOnlyFileList: commit.hasConflict,
+          isSubtreeAbandonDisabled,
           showFileList,
         },
         actions: {
@@ -507,6 +556,8 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
           onBookmarkRename: (name) => commands.openBookmarkRename(name),
           onSplitStart: () => { void commands.startSplit(commit.changeId) },
           onSquashStart: () => commands.startSquash(commit.changeId, commit.description, commit.parents[0] ?? ''),
+          onAbandonStart: () => commands.startAbandon(commit.changeId, commit.description, 'commit'),
+          onAbandonSubtreeStart: () => commands.startAbandon(commit.changeId, commit.description, 'subtree'),
           onRebaseStart: () => commands.startRebase(commit.changeId, commit.description),
           onFileDragStart: (path, pointer) => commands.startFileDrag(commit.changeId, [path], pointer),
           onMoveSingleFile: (path) => { void commands.startMoveSingleFile(commit.changeId, path) },

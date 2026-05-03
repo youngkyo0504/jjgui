@@ -634,6 +634,16 @@ export async function squashCommit(cwd: string, changeId: string): Promise<Opera
   })
 }
 
+export type AbandonScope = 'commit' | 'subtree'
+
+/** 커밋 또는 해당 커밋에서 시작하는 서브트리 전체를 버린다 */
+export async function abandonCommit(cwd: string, changeId: string, scope: AbandonScope = 'commit'): Promise<OperationResult> {
+  const revset = scope === 'subtree' ? `${changeId}::` : changeId
+  return captureOperationResult(cwd, async () => {
+    await $`jj abandon ${revset}`.cwd(cwd)
+  })
+}
+
 /** 특정 파일의 변경만 현재 revision에서 제거한다 */
 export async function discardFileChanges(cwd: string, changeId: string, path: string): Promise<OperationResult> {
   return captureOperationResult(cwd, async () => {

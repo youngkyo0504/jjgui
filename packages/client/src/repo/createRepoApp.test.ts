@@ -70,6 +70,7 @@ function createFakeApi(overrides: Partial<RepoApiPort> = {}): RepoApiPort {
     undo: async () => undefined,
     split: async () => ({ beforeOpId: 'split-op', afterOpId: 'split-after' }),
     squash: async () => ({ beforeOpId: 'squash-op', afterOpId: 'squash-after' }),
+    abandon: async () => ({ beforeOpId: 'abandon-op', afterOpId: 'abandon-after' }),
     discardFile: async () => ({ beforeOpId: 'discard-op', afterOpId: 'discard-after' }),
     moveChanges: async () => ({ beforeOpId: 'move-op', afterOpId: 'move-after' }),
     bookmarkRename: async () => undefined,
@@ -212,6 +213,106 @@ test('split validation stays at the boundary and prevents empty original commits
   await session.commands.submitFileSelection(['a.ts', 'b.ts'])
   expect(session.getSnapshot().errorBanner).toBe('At least one file must remain in the original commit')
   expect(splitCalls).toBe(0)
+  session.dispose()
+})
+
+test('abandon commit confirmation calls API with commit scope', async () => {
+  const abandonCalls: Array<{ changeId: string; scope: 'commit' | 'subtree' }> = []
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => [makeCommitRow('source')],
+      abandon: async (_cwd, input) => {
+        abandonCalls.push(input)
+        return { beforeOpId: 'abandon-op', afterOpId: 'abandon-after' }
+      },
+    }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  session.commands.startAbandon('source', 'source', 'commit')
+
+  expect(session.getSnapshot().dialog).toEqual({
+    kind: 'confirm',
+    confirmKind: 'abandon',
+    changeId: 'source',
+    description: 'source',
+    scope: 'commit',
+    commitCount: 1,
+  })
+
+  await session.commands.confirmDialog()
+
+  expect(abandonCalls).toEqual([{ changeId: 'source', scope: 'commit' }])
+  expect(session.getSnapshot().moveChanges).toEqual({
+    phase: 'idle',
+    lastAction: 'abandon',
+  })
+  session.dispose()
+})
+
+test('abandon subtree confirmation counts descendants and calls API with subtree scope', async () => {
+  const rows = [
+    makeCommitRow('source'),
+    makeCommitRow('child', ['source']),
+    makeCommitRow('leaf', ['child']),
+  ]
+  const abandonCalls: Array<{ changeId: string; scope: 'commit' | 'subtree' }> = []
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => rows,
+      abandon: async (_cwd, input) => {
+        abandonCalls.push(input)
+        return { beforeOpId: 'abandon-op', afterOpId: 'abandon-after' }
+      },
+    }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  session.commands.startAbandon('source', 'source', 'subtree')
+
+  expect(session.getSnapshot().dialog).toEqual({
+    kind: 'confirm',
+    confirmKind: 'abandon',
+    changeId: 'source',
+    description: 'source',
+    scope: 'subtree',
+    commitCount: 3,
+  })
+
+  await session.commands.confirmDialog()
+
+  expect(abandonCalls).toEqual([{ changeId: 'source', scope: 'subtree' }])
+  expect(session.getSnapshot().moveChanges).toEqual({
+    phase: 'idle',
+    lastAction: 'abandon-subtree',
+  })
+  session.dispose()
+})
+
+test('abandon subtree refuses to include the working copy commit', async () => {
+  const child = makeCommitRow('child', ['source'])
+  child.commit!.isWorkingCopy = true
+  const rows = [makeCommitRow('source'), child]
+  let abandonCalls = 0
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadLog: async () => rows,
+      abandon: async () => {
+        abandonCalls++
+        return { beforeOpId: 'abandon-op', afterOpId: 'abandon-after' }
+      },
+    }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  await session.commands.initialize()
+  session.commands.startAbandon('source', 'source', 'subtree')
+
+  expect(session.getSnapshot().dialog).toBeNull()
+  expect(session.getSnapshot().errorBanner).toBe('Cannot abandon a subtree containing the working copy')
+  expect(abandonCalls).toBe(0)
   session.dispose()
 })
 
