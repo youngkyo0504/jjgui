@@ -31,7 +31,7 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
     }
   }, [onClose])
 
-  // 화면 밖으로 나가지 않도록 위치 조정
+  // Keep the menu inside the viewport.
   useEffect(() => {
     if (!ref.current) return
     const rect = ref.current.getBoundingClientRect()

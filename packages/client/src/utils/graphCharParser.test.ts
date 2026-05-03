@@ -2,52 +2,52 @@ import { describe, test, expect } from 'bun:test'
 import { parseGraphChars } from './graphCharParser'
 
 describe('parseGraphChars', () => {
-  test('단일 세로선 (│) → line 타입', () => {
+  test('single vertical line (│) maps to line type', () => {
     const result = parseGraphChars('│', ['#7aa2f7'])
     expect(result).toEqual([{ type: 'line', color: '#7aa2f7' }])
   })
 
-  test('일반 커밋 (○) → node(normal) 타입', () => {
+  test('normal commit (○) maps to node(normal) type', () => {
     const result = parseGraphChars('○', ['#9ece6a'])
     expect(result).toEqual([{ type: 'node', color: '#9ece6a', nodeType: 'normal' }])
   })
 
-  test('working copy (@) → node(working-copy) 타입', () => {
+  test('working copy (@) maps to node(working-copy) type', () => {
     const result = parseGraphChars('@', ['#9ece6a'])
     expect(result).toEqual([{ type: 'node', color: '#9ece6a', nodeType: 'working-copy' }])
   })
 
-  test('immutable (◆) → node(immutable) 타입', () => {
+  test('immutable (◆) maps to node(immutable) type', () => {
     const result = parseGraphChars('◆', ['#e0af68'])
     expect(result).toEqual([{ type: 'node', color: '#e0af68', nodeType: 'immutable' }])
   })
 
-  test('tee-right (├) → tee-right 타입', () => {
+  test('tee-right (├) maps to tee-right type', () => {
     const result = parseGraphChars('├', ['#7aa2f7'])
     expect(result).toEqual([{ type: 'tee-right', color: '#7aa2f7' }])
   })
 
-  test('merge-up (╯) → merge-up 타입', () => {
+  test('merge-up (╯) maps to merge-up type', () => {
     const result = parseGraphChars('╯', ['#bb9af7'])
     expect(result).toEqual([{ type: 'merge-up', color: '#bb9af7' }])
   })
 
-  test('branch-down (╰) → branch-down 타입', () => {
+  test('branch-down (╰) maps to branch-down type', () => {
     const result = parseGraphChars('╰', ['#2ac3de'])
     expect(result).toEqual([{ type: 'branch-down', color: '#2ac3de' }])
   })
 
-  test('curve-right (╮) → curve-right 타입', () => {
+  test('curve-right (╮) maps to curve-right type', () => {
     const result = parseGraphChars('╮', ['#bb9af7'])
     expect(result).toEqual([{ type: 'curve-right', color: '#bb9af7' }])
   })
 
-  test('curve-left (╭) → curve-left 타입', () => {
+  test('curve-left (╭) maps to curve-left type', () => {
     const result = parseGraphChars('╭', ['#2ac3de'])
     expect(result).toEqual([{ type: 'curve-left', color: '#2ac3de' }])
   })
 
-  test('복합 패턴 (├─╯) → tee + horizontal + merge-up', () => {
+  test('compound pattern (├─╯) maps to tee + horizontal + merge-up', () => {
     const result = parseGraphChars('├─╯', ['#7aa2f7', '#e0af68', '#9ece6a'])
     expect(result).toEqual([
       { type: 'tee-right', color: '#7aa2f7', horizontalColor: '#9ece6a' },
@@ -56,7 +56,7 @@ describe('parseGraphChars', () => {
     ])
   })
 
-  test('복합 패턴 (╰─┤) → horizontal 색이 왼쪽 branch 색을 따른다', () => {
+  test('compound pattern (╰─┤) uses the left branch color for the horizontal segment', () => {
     const result = parseGraphChars('╰─┤', ['#9ece6a', '#e0af68', '#7aa2f7'])
     expect(result).toEqual([
       { type: 'branch-down', color: '#9ece6a' },
@@ -65,7 +65,7 @@ describe('parseGraphChars', () => {
     ])
   })
 
-  test('복합 패턴 (│ ○) → line + empty + node', () => {
+  test('compound pattern (│ ○) maps to line + empty + node', () => {
     const result = parseGraphChars('│ ○', ['#7aa2f7', '', '#9ece6a'])
     expect(result).toEqual([
       { type: 'line', color: '#7aa2f7' },
@@ -74,34 +74,34 @@ describe('parseGraphChars', () => {
     ])
   })
 
-  test('수평선 (─) → horizontal 타입', () => {
+  test('horizontal line (─) maps to horizontal type', () => {
     const result = parseGraphChars('─', ['#7aa2f7'])
     expect(result).toEqual([{ type: 'horizontal', color: '#7aa2f7' }])
   })
 
-  test('elided (~) → elided 타입', () => {
+  test('elided (~) maps to elided type', () => {
     const result = parseGraphChars('~', ['#7aa2f7'])
     expect(result).toEqual([{ type: 'elided', color: '#7aa2f7' }])
   })
 
-  test('laneColors 없으면 빈 문자열 color', () => {
+  test('missing laneColors uses an empty string color', () => {
     const result = parseGraphChars('│')
     expect(result).toEqual([{ type: 'line', color: '' }])
   })
 
-  test('빈 graphChars → 빈 배열', () => {
+  test('empty graphChars maps to an empty array', () => {
     const result = parseGraphChars('')
     expect(result).toEqual([])
   })
 
-  test('문맥이 있으면 tip 노드는 아래로만 연결한다', () => {
+  test('with context, a tip node only connects down', () => {
     const result = parseGraphChars('○', ['#7aa2f7'], { nextGraphChars: '○' })
     expect(result).toEqual([
       { type: 'node', color: '#7aa2f7', nodeType: 'normal', connectsUp: false, connectsDown: true },
     ])
   })
 
-  test('문맥이 있으면 중간 노드는 위아래로 연결한다', () => {
+  test('with context, a middle node connects up and down', () => {
     const result = parseGraphChars('○', ['#7aa2f7'], {
       previousGraphChars: '○',
       nextGraphChars: '○',
@@ -111,14 +111,14 @@ describe('parseGraphChars', () => {
     ])
   })
 
-  test('문맥이 있으면 끝 노드는 위로만 연결한다', () => {
+  test('with context, an end node only connects up', () => {
     const result = parseGraphChars('○', ['#7aa2f7'], { previousGraphChars: '○' })
     expect(result).toEqual([
       { type: 'node', color: '#7aa2f7', nodeType: 'normal', connectsUp: true, connectsDown: false },
     ])
   })
 
-  test('사이드 분기의 첫 노드는 위로 연결하지 않고 아래 edge row로만 연결한다', () => {
+  test('the first node on a side branch connects only down to the edge row', () => {
     const result = parseGraphChars('│ ○', ['#7aa2f7', '', '#9ece6a'], {
       previousGraphChars: '○',
       nextGraphChars: '├─╯',

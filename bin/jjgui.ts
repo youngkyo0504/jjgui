@@ -9,7 +9,7 @@ const PID_FILE = '/tmp/jjgui.pid'
 const LOG_FILE = '/tmp/jjgui.log'
 const HEALTH_URL = `http://localhost:${PORT}/health`
 
-// jjgui 서버가 실행 중인지 /health로 확인
+// Check /health to see whether the jjgui server is running.
 async function isServerRunning(): Promise<boolean> {
   try {
     const res = await fetch(HEALTH_URL)
@@ -21,18 +21,18 @@ async function isServerRunning(): Promise<boolean> {
   }
 }
 
-// stale PID 파일 정리
+// Clean up stale PID files.
 function cleanStalePid(): void {
   try {
     const pid = Number(readFileSync(PID_FILE, 'utf-8').trim())
-    process.kill(pid, 0) // 프로세스 생존 확인
+    process.kill(pid, 0) // Check whether the process is alive.
   } catch {
-    // 프로세스가 없으면 PID 파일 삭제
+    // Delete the PID file if the process is gone.
     try { unlinkSync(PID_FILE) } catch {}
   }
 }
 
-// 서버가 뜰 때까지 폴링 (최대 5초)
+// Poll until the server starts, up to 5 seconds.
 async function waitForServer(): Promise<boolean> {
   for (let i = 0; i < 50; i++) {
     if (await isServerRunning()) return true
@@ -41,20 +41,20 @@ async function waitForServer(): Promise<boolean> {
   return false
 }
 
-// --- stop 모드 ---
+// --- stop mode ---
 if (process.argv[2] === 'stop') {
   try {
     const pid = Number(readFileSync(PID_FILE, 'utf-8').trim())
     process.kill(pid, 'SIGTERM')
     try { unlinkSync(PID_FILE) } catch {}
-    console.log(`jjgui 서버 종료 (PID ${pid})`)
+    console.log(`jjgui server stopped (PID ${pid})`)
   } catch {
-    console.log('실행 중인 jjgui 서버가 없습니다.')
+    console.log('No running jjgui server found.')
   }
   process.exit(0)
 }
 
-// --- --opener 플래그 파싱 ---
+// --- parse --opener flag ---
 let openerFlag: string | undefined
 let pathArg = '.'
 
@@ -69,20 +69,20 @@ for (const arg of process.argv.slice(2)) {
 const config = loadConfig()
 const opener = resolveOpener(openerFlag, config)
 
-// --- start/connect 모드 ---
+// --- start/connect mode ---
 const cwd = resolve(pathArg)
 const url = `http://localhost:${PORT}/?cwd=${encodeURIComponent(cwd)}`
 
 if (await isServerRunning()) {
-  console.log('jjgui 서버가 이미 실행 중입니다. 브라우저를 엽니다.')
+  console.log('jjgui server is already running. Opening browser.')
   await open(url, opener, config)
   process.exit(0)
 }
 
-// stale PID 정리
+// Clean stale PID.
 cleanStalePid()
 
-// 서버를 detached subprocess로 스폰
+// Spawn the server as a detached subprocess.
 const serverEntry = resolve(import.meta.dir, '../packages/server/src/index.ts')
 const logFd = openSync(LOG_FILE, 'a')
 
@@ -98,7 +98,7 @@ console.log(`watching: ${cwd}`)
 if (await waitForServer()) {
   await open(url, opener, config)
 } else {
-  console.error('서버 시작 실패. 로그를 확인하세요: /tmp/jjgui.log')
+  console.error('Failed to start server. Check logs: /tmp/jjgui.log')
 }
 
 process.exit(0)

@@ -1,6 +1,6 @@
 /**
- * 브라우저 열기 모듈
- * opener 설정에 따라 시스템 브라우저 또는 cmux 내장 브라우저로 URL을 연다
+ * Browser opener module.
+ * Opens URLs in the system browser or cmux browser based on opener settings.
  */
 import type { JjguiConfig } from './config'
 

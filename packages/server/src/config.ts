@@ -1,5 +1,5 @@
 /**
- * ~/.jjgui/config.toml 설정 로드 모듈
+ * Loads ~/.jjgui/config.toml.
  */
 import { readFileSync } from 'fs'
 import { join } from 'path'
@@ -24,8 +24,8 @@ const DEFAULT_CONFIG: JjguiConfig = {
 }
 
 /**
- * 간단한 TOML 파서 (외부 의존성 없이 필요한 설정만 파싱)
- * 지원: 최상위 key = "value", [section] 하위 key = "value"
+ * Simple TOML parser for the small config surface we need.
+ * Supports top-level key = "value" and [section] key = "value".
  */
 function parseSimpleToml(content: string): Record<string, any> {
   const result: Record<string, any> = {}
@@ -35,7 +35,7 @@ function parseSimpleToml(content: string): Record<string, any> {
     const line = rawLine.trim()
     if (!line || line.startsWith('#')) continue
 
-    // [section] 헤더
+    // [section] header
     const sectionMatch = line.match(/^\[(\w+)\]$/)
     if (sectionMatch) {
       currentSection = sectionMatch[1]
@@ -43,7 +43,7 @@ function parseSimpleToml(content: string): Record<string, any> {
       continue
     }
 
-    // key = "value" 또는 key = value
+    // key = "value" or key = value
     const kvMatch = line.match(/^(\w+)\s*=\s*"?([^"]*)"?$/)
     if (kvMatch) {
       const [, key, value] = kvMatch
@@ -78,20 +78,20 @@ export function loadConfig(): JjguiConfig {
 
     return { opener, cmux: { openMode, splitDirection } }
   } catch {
-    // 설정 파일이 없으면 기본값
+    // Use defaults when the config file does not exist.
     return { ...DEFAULT_CONFIG }
   }
 }
 
 /**
- * CLI 플래그, 설정 파일, 환경변수를 종합하여 최종 opener 결정
- * 우선순위: CLI 플래그 > 설정 파일 > 환경변수 자동감지 > 기본값
+ * Resolve the final opener from CLI flags, config, and environment variables.
+ * Priority: CLI flag > config file > environment auto-detection > default.
  */
 export function resolveOpener(
   cliFlag: string | undefined,
   config: JjguiConfig,
 ): 'browser' | 'cmux' {
-  // 1. CLI 플래그
+  // 1. CLI flag
   if (cliFlag === 'browser') return 'browser'
   if (cliFlag === 'cmux') return 'cmux'
   if (cliFlag && cliFlag !== 'auto') {
@@ -99,14 +99,14 @@ export function resolveOpener(
     process.exit(1)
   }
 
-  // 2. 설정 파일 (auto가 아닌 경우)
+  // 2. Config file when it is not auto.
   const effective = cliFlag === 'auto' ? 'auto' : config.opener
   if (effective === 'browser') return 'browser'
   if (effective === 'cmux') return 'cmux'
 
-  // 3. auto: 환경변수로 자동감지
+  // 3. auto: detect from environment variables.
   if (process.env.CMUX_SURFACE_ID) return 'cmux'
 
-  // 4. 기본값
+  // 4. Default.
   return 'browser'
 }

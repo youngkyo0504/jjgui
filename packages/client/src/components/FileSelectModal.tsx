@@ -6,7 +6,7 @@ interface Props {
   files: ChangedFile[]
   onSubmit: (selectedPaths: string[]) => void
   onCancel: () => void
-  minUnselected?: number // split에서 최소 1개는 원래 커밋에 남아야 함
+  minUnselected?: number // split must leave at least one file in the original commit
 }
 
 export default function FileSelectModal({ title, files, onSubmit, onCancel, minUnselected = 0 }: Props) {

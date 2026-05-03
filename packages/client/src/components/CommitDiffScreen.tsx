@@ -437,17 +437,17 @@ export default function CommitDiffScreen({ cwd, route, commits }: Props) {
               <>
                 {diff.isMerge && (
                   <div className="commit-diff-note">
-                    Merge commit에서는 추가 문맥 확장을 지원하지 않고 patch 기준 diff만 보여줍니다.
+                    Merge commits do not support expanded context, so only the patch diff is shown.
                   </div>
                 )}
                 {!diff.canExpandContext && !diff.isMerge && (
                   <div className="commit-diff-note">
-                    이 커밋에서는 추가 문맥 확장을 사용할 수 없습니다.
+                    Expanded context is not available for this commit.
                   </div>
                 )}
                 {contentsState.status === 'error' && (
                   <div className="commit-diff-note commit-diff-note--warning">
-                    추가 문맥을 불러오지 못해 patch 기준 diff만 표시합니다.
+                    Could not load expanded context, so only the patch diff is shown.
                   </div>
                 )}
                 <JjDiffViewer

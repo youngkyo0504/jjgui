@@ -156,11 +156,11 @@ const OP_LOG_TEMPLATE = [
 ].join(' ++ ')
 
 function splitGraphAndData(line: string): { graphPrefix: string; data: string } {
-  // commit 라인은 \x1f 구분자를 포함하므로, 첫 \x1f 앞의 changeId 시작 위치를 역추적
+  // Commit lines include the \x1f separator, so walk back to the changeId start.
   const sepIdx = line.indexOf('\x1f')
   if (sepIdx !== -1) {
-    // \x1f 앞에 changeId(알파벳)가 있고, 그 앞이 그래프 영역
-    // changeId는 알파벳 소문자로만 구성되므로 알파벳이 시작되는 지점을 찾음
+    // The changeId sits before \x1f, and the graph prefix sits before that.
+    // changeIds contain lowercase ASCII letters, so find where that run starts.
     let dataStart = sepIdx
     while (dataStart > 0 && /[a-z]/.test(line[dataStart - 1])) {
       dataStart--
@@ -171,7 +171,7 @@ function splitGraphAndData(line: string): { graphPrefix: string; data: string } 
     }
   }
 
-  // edge/elided 라인: \x1f가 없으므로 기존 방식으로 그래프 문자 소비
+  // Edge/elided lines do not have \x1f, so consume graph chars directly.
   let i = 0
   while (i < line.length) {
     const codePoint = line.codePointAt(i)!
@@ -555,7 +555,7 @@ function formatCommandError(e: any): string {
   return collectCommandOutput(e.stdout, e.stderr) || e.message || String(e)
 }
 
-/** 현재 최신 operation id를 가져온다 */
+/** Get the current latest operation id. */
 async function getCurrentOperationId(cwd: string): Promise<string> {
   const result = await $`jj --ignore-working-copy op log --no-graph -T 'self.id().short() ++ "\n"' --limit 1`.cwd(cwd).text()
   return result.trim()
@@ -600,7 +600,7 @@ export async function getOperationLog(cwd: string, limit = 30): Promise<Operatio
     })
 }
 
-/** rebase 실행 후 이전/이후 operation id를 반환한다 */
+/** Run rebase and return the before/after operation ids. */
 export async function rebaseCommit(
   cwd: string,
   sourceChangeId: string,
@@ -613,12 +613,12 @@ export async function rebaseCommit(
   })
 }
 
-/** 특정 operation 상태로 복원한다 */
+/** Restore to a specific operation. */
 export async function restoreOperation(cwd: string, operationId: string): Promise<void> {
   await $`jj op restore ${operationId}`.cwd(cwd)
 }
 
-/** 특정 operation을 되돌리기 전에 영향 요약을 가져온다 */
+/** Get the impact summary before reverting a specific operation. */
 export async function getOperationPreview(cwd: string, operationId: string): Promise<OperationPreview> {
   const summary = await $`jj --at-op=@ --ignore-working-copy --color never op show --summary ${operationId}`.cwd(cwd).text()
   return {
@@ -627,25 +627,25 @@ export async function getOperationPreview(cwd: string, operationId: string): Pro
   }
 }
 
-/** 특정 operation 하나만 역적용한다 */
+/** Revert a single specific operation. */
 export async function revertOperation(cwd: string, operationId: string): Promise<OperationResult> {
   return captureOperationResult(cwd, async () => {
     await $`jj op revert ${operationId}`.cwd(cwd)
   })
 }
 
-/** 커밋의 전체 description을 가져온다 */
+/** Get the full commit description. */
 export async function getFullDescription(cwd: string, changeId: string): Promise<string> {
   const result = await $`jj log --no-graph -r ${changeId} -T 'description'`.cwd(cwd).text()
   return result.replace(/\n$/, '')
 }
 
-/** 커밋의 description을 변경한다 */
+/** Change a commit description. */
 export async function describeCommit(cwd: string, changeId: string, message: string): Promise<void> {
   await $`jj describe ${changeId} -m ${message}`.cwd(cwd)
 }
 
-/** 북마크를 생성한다 */
+/** Create a bookmark. */
 export async function bookmarkCreate(cwd: string, name: string, changeId: string): Promise<void> {
   try {
     await $`jj bookmark create ${name} -r ${changeId}`.cwd(cwd).quiet()
@@ -654,26 +654,26 @@ export async function bookmarkCreate(cwd: string, name: string, changeId: string
   }
 }
 
-/** 북마크를 이동한다 */
+/** Move a bookmark. */
 export async function bookmarkMove(cwd: string, name: string, destinationChangeId: string): Promise<string> {
   const beforeOpId = await getCurrentOperationId(cwd)
   await $`jj bookmark move ${name} --to ${destinationChangeId}`.cwd(cwd)
   return beforeOpId
 }
 
-/** 북마크를 삭제한다 */
+/** Delete a bookmark. */
 export async function bookmarkDelete(cwd: string, name: string): Promise<void> {
   await $`jj bookmark delete ${name}`.cwd(cwd)
 }
 
-/** 북마크 이름을 변경한다 */
+/** Rename a bookmark. */
 export async function bookmarkRename(cwd: string, oldName: string, newName: string): Promise<void> {
   await $`jj bookmark rename ${oldName} ${newName}`.cwd(cwd)
 }
 
-/** 커밋을 분할한다 (paths에 해당하는 파일이 첫 번째 커밋에 남음) */
+/** Split a commit, keeping the selected paths in the first commit. */
 export async function splitCommit(cwd: string, changeId: string, paths: string[]): Promise<OperationResult> {
-  // 기존 description을 가져와서 -m으로 전달하여 에디터가 열리지 않도록 함
+  // Reuse the existing description with -m so jj does not open an editor.
   const description = await $`jj log --no-graph -r ${changeId} -T 'description'`.cwd(cwd).text()
   const desc = description.replace(/\n$/, '') || '(split)'
   return captureOperationResult(cwd, async () => {
@@ -685,7 +685,7 @@ export async function splitCommit(cwd: string, changeId: string, paths: string[]
   })
 }
 
-/** 커밋을 부모로 합친다 */
+/** Squash a commit into its parent. */
 export async function squashCommit(cwd: string, changeId: string): Promise<OperationResult> {
   return captureOperationResult(cwd, async () => {
     await $`jj squash -r ${changeId}`.cwd(cwd)
@@ -694,7 +694,7 @@ export async function squashCommit(cwd: string, changeId: string): Promise<Opera
 
 export type AbandonScope = 'commit' | 'subtree'
 
-/** 커밋 또는 해당 커밋에서 시작하는 서브트리 전체를 버린다 */
+/** Abandon a commit or the full subtree that starts at that commit. */
 export async function abandonCommit(cwd: string, changeId: string, scope: AbandonScope = 'commit'): Promise<OperationResult> {
   const revset = scope === 'subtree' ? `${changeId}::` : changeId
   return captureOperationResult(cwd, async () => {
@@ -702,27 +702,27 @@ export async function abandonCommit(cwd: string, changeId: string, scope: Abando
   })
 }
 
-/** 특정 파일의 변경만 현재 revision에서 제거한다 */
+/** Remove changes for a specific file from the current revision. */
 export async function discardFileChanges(cwd: string, changeId: string, path: string): Promise<OperationResult> {
   return captureOperationResult(cwd, async () => {
     await $`jj restore --changes-in ${changeId} --restore-descendants ${path}`.cwd(cwd).quiet()
   })
 }
 
-/** 변경사항을 다른 커밋으로 이동한다 */
+/** Move changes to another commit. */
 export async function moveChanges(cwd: string, fromChangeId: string, toChangeId: string, paths: string[]): Promise<OperationResult> {
   return captureOperationResult(cwd, async () => {
     await $`jj squash --keep-emptied --from ${fromChangeId} --into ${toChangeId} ${paths}`.cwd(cwd)
   })
 }
 
-/** git remote 목록을 가져온다 */
+/** Get the git remote list. */
 export async function getRemotes(cwd: string): Promise<string[]> {
   const result = await $`jj --ignore-working-copy git remote list`.cwd(cwd).text()
   return result.split('\n').filter(Boolean).map((line) => line.split(/\s+/)[0])
 }
 
-/** 모든 remote를 순차적으로 fetch하고 remote별 결과를 반환한다 */
+/** Fetch all remotes sequentially and return per-remote results. */
 export async function fetchAllRemotes(cwd: string): Promise<FetchAllRemotesResult> {
   const remotes = await getRemotes(cwd)
   if (remotes.length === 0) {
@@ -758,7 +758,7 @@ export async function fetchAllRemotes(cwd: string): Promise<FetchAllRemotesResul
   }
 }
 
-/** 로컬 bookmark 목록을 가져온다 */
+/** Get local bookmarks. */
 export async function bookmarkList(cwd: string): Promise<string[]> {
   const result = await $`jj bookmark list --template 'name ++ "\x1f" ++ remote ++ "\n"'`.cwd(cwd).text()
   const localBookmarks: string[] = []
@@ -775,7 +775,7 @@ export async function bookmarkList(cwd: string): Promise<string[]> {
   return localBookmarks
 }
 
-/** bookmark을 설정한다 (존재하면 move, 없으면 create) */
+/** Set a bookmark, moving it when it already exists. */
 export async function bookmarkSet(cwd: string, name: string, changeId: string, allowBackwards = false): Promise<void> {
   try {
     if (allowBackwards) {
@@ -788,7 +788,7 @@ export async function bookmarkSet(cwd: string, name: string, changeId: string, a
   }
 }
 
-/** bookmark 또는 bookmark subtree를 git remote에 push한다 */
+/** Push a bookmark or bookmark subtree to a git remote. */
 export async function pushBookmark(cwd: string, bookmark: string, remote: string, scope: PushScope = 'bookmark'): Promise<string> {
   const result = scope === 'subtree'
     ? await $`jj git push -r ${`${bookmark}::`} --remote ${remote}`.cwd(cwd).quiet()

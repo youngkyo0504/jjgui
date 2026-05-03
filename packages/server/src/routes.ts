@@ -28,7 +28,7 @@ import {
   getOperationLog,
 } from './jj'
 
-// cwd별 SSE 클라이언트 관리
+// Manage SSE clients by cwd.
 const sseClients = new Map<string, Set<ReadableStreamDefaultController>>()
 
 export function notifyClients(cwd: string) {

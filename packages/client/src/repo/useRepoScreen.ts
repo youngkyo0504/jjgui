@@ -371,7 +371,7 @@ function buildFileSelectModal(snapshot: RepoSnapshot, commands: RepoCommands): R
   if (!dialog || dialog.kind !== 'file-select' || dialog.mode !== 'split') return null
 
   return {
-    title: 'Split: 새 커밋으로 빼낼 파일 선택',
+    title: 'Split: select files to move into the new commit',
     files: dialog.files,
     minUnselected: 1,
     onSubmit: (paths) => { void commands.submitFileSelection(paths) },

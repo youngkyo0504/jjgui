@@ -8,7 +8,7 @@ const PORT = 7777
 const DIST = join(import.meta.dir, '../../client/dist')
 const PID_FILE = '/tmp/jjgui.pid'
 
-// cwd별 파일 워처 관리
+// Manage file watchers by cwd.
 const watchers = new Map<string, FSWatcher>()
 
 export function ensureWatcher(cwd: string) {
@@ -31,15 +31,15 @@ const server = Bun.serve({
       return Response.json({ ok: true, pid: process.pid })
     }
 
-    // API 요청 처리
+    // Handle API requests.
     if (url.pathname.startsWith('/api/')) {
-      // cwd가 있으면 워처 등록
+      // Register a watcher when cwd is present.
       const cwd = url.searchParams.get('cwd')
       if (cwd) ensureWatcher(cwd)
       return handleRequest(req)
     }
 
-    // static 파일 서빙
+    // Serve static files.
     const filePath = url.pathname === '/' ? '/index.html' : url.pathname
     const file = Bun.file(join(DIST, filePath))
     if (await file.exists()) {
@@ -51,10 +51,10 @@ const server = Bun.serve({
   },
 })
 
-// PID 파일 기록
+// Write PID file.
 writeFileSync(PID_FILE, String(process.pid))
 
-// SIGTERM 핸들러
+// SIGTERM handler.
 process.on('SIGTERM', () => {
   try { unlinkSync(PID_FILE) } catch {}
   process.exit(0)

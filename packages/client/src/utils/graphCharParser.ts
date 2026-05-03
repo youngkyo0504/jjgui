@@ -1,6 +1,6 @@
 /**
- * graphChars 문자열 + laneColors 배열을 파싱하여
- * SVG 렌더링에 필요한 구조화된 데이터로 변환
+ * Parse a graphChars string and laneColors array into the structured data
+ * needed for SVG rendering.
  */
 
 export type CellType = 'line' | 'node' | 'merge-up' | 'branch-down' | 'curve-right' | 'curve-left' | 'horizontal' | 'empty' | 'elided' | 'tee-right' | 'tee-left'
@@ -110,19 +110,19 @@ export function parseGraphChars(graphChars: string, laneColors: string[] = [], c
     } else if (LINE_CHARS.has(ch)) {
       cells.push({ type: 'line', color })
     } else if (ch === '├' || ch === '┤') {
-      // tee: 세로선 + 수평 분기
+      // tee: vertical line plus horizontal branch
       cells.push({ type: ch === '├' ? 'tee-right' : 'tee-left', color })
     } else if (ch === '╯' || ch === '┘') {
-      // 아래에서 올라와서 왼쪽으로 합류 (merge up-left)
+      // Comes up from below and merges left.
       cells.push({ type: 'merge-up', color })
     } else if (ch === '╰' || ch === '└') {
-      // 위에서 내려와서 왼쪽으로 분기 (branch down-left)
+      // Comes down from above and branches left.
       cells.push({ type: 'branch-down', color })
     } else if (ch === '╮' || ch === '┐') {
-      // 왼쪽에서 와서 아래로 내려감 (curve-right)
+      // Comes from the left and curves down.
       cells.push({ type: 'curve-right', color })
     } else if (ch === '╭' || ch === '┌') {
-      // 왼쪽에서 와서 위로 올라감 (curve-left)
+      // Comes from the left and curves up.
       cells.push({ type: 'curve-left', color })
     } else if (HORIZONTAL_CHARS.has(ch)) {
       cells.push({ type: 'horizontal', color })

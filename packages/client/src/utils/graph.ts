@@ -9,7 +9,7 @@ interface GraphRow {
 }
 
 /**
- * GraphRow 배열에서 parent → children 역방향 맵을 구축한다.
+ * Build a reverse parent-to-children map from GraphRow entries.
  * key: parentChangeId, value: childChangeId[]
  */
 export function buildChildrenMap(rows: GraphRow[]): Map<string, string[]> {
@@ -32,8 +32,8 @@ export function buildChildrenMap(rows: GraphRow[]): Map<string, string[]> {
 }
 
 /**
- * 특정 커밋의 모든 descendants를 BFS로 계산한다.
- * source 자신은 포함하지 않는다.
+ * Calculate all descendants of a commit with BFS.
+ * The source commit itself is not included.
  */
 export function getDescendants(changeId: string, childrenMap: Map<string, string[]>): Set<string> {
   const descendants = new Set<string>()

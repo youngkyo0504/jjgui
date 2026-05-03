@@ -11,34 +11,34 @@ export default function MoveChangesBanner({ moveChanges, onCancel, onConfirm, on
   const getExecutingMessage = () => {
     switch (moveChanges.lastAction) {
       case 'discard-file':
-        return '파일 변경사항 취소 중...'
+        return 'Discarding file changes...'
       case 'split':
-        return '커밋 분할 중...'
+        return 'Splitting commit...'
       case 'squash':
-        return '변경사항 합치는 중...'
+        return 'Squashing changes...'
       case 'abandon':
-        return '커밋 버리는 중...'
+        return 'Abandoning commit...'
       case 'abandon-subtree':
-        return '서브트리 버리는 중...'
+        return 'Abandoning subtree...'
       default:
-        return '변경사항 이동 중...'
+        return 'Moving changes...'
     }
   }
 
   const getSuccessMessage = () => {
     switch (moveChanges.lastAction) {
       case 'discard-file':
-        return '파일 변경사항 취소 완료'
+        return 'File changes discarded'
       case 'split':
-        return '커밋 분할 완료'
+        return 'Commit split complete'
       case 'squash':
-        return '변경사항 합치기 완료'
+        return 'Changes squashed'
       case 'abandon':
-        return '커밋 버리기 완료'
+        return 'Commit abandoned'
       case 'abandon-subtree':
-        return '서브트리 버리기 완료'
+        return 'Subtree abandoned'
       case 'move-changes':
-        return '변경사항 이동 완료'
+        return 'Changes moved'
       default:
         return ''
     }
@@ -48,7 +48,7 @@ export default function MoveChangesBanner({ moveChanges, onCancel, onConfirm, on
     return (
       <div className="rebase-banner">
         <span className="rebase-banner-text">
-          Move changes: <strong>{moveChanges.fromChangeId}</strong> ({moveChanges.selectedPaths?.length} files) — destination 커밋을 클릭하세요.
+          Move changes: <strong>{moveChanges.fromChangeId}</strong> ({moveChanges.selectedPaths?.length} files) - click a destination commit.
         </span>
         <button className="rebase-banner-btn rebase-banner-btn--cancel" onClick={onCancel}>
           Cancel (ESC)

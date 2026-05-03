@@ -164,7 +164,7 @@ export default function FileList({
   return (
     <div className={`file-list${readOnly ? ' file-list--readonly' : ''}`}>
       {readOnly && (
-        <div className="file-list-note">Conflict 파일은 터미널에서 해결하세요.</div>
+        <div className="file-list-note">Resolve conflicted files in the terminal.</div>
       )}
       {files.map((file) => (
         <DraggableFileItem
@@ -191,17 +191,17 @@ export default function FileList({
           y={contextMenu.y}
           items={[
             {
-              label: '파일 변경사항 취소',
+              label: 'Discard file changes',
               disabled: actionsDisabled,
               onClick: () => onDiscardFile(contextMenu.file.path),
             },
             {
-              label: '파일 선택해서 다른 커밋으로 옮기기',
+              label: 'Move selected file to another commit',
               disabled: actionsDisabled,
               onClick: () => onMoveFile(contextMenu.file.path),
             },
             {
-              label: 'Diff 보기',
+              label: 'View diff',
               disabled: actionsDisabled,
               onClick: () => onViewDiff(contextMenu.file.path),
             },
