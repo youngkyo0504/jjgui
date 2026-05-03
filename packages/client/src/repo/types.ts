@@ -26,6 +26,7 @@ export type OperationKind =
   | 'abandon-subtree'
   | 'discard-file'
   | 'fetch'
+  | 'revert'
   | 'restore'
   | 'unknown'
 
@@ -36,7 +37,16 @@ export interface OperationLogEntry {
   user: string
   description: string
   timestamp: string
+  tags: string
+  parentIds: string[]
   isCurrent: boolean
+  isSnapshot: boolean
+  isRoot: boolean
+}
+
+export interface OperationPreview {
+  operationId: string
+  summary: string
 }
 
 export interface RecentOperation {

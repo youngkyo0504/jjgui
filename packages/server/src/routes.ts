@@ -7,6 +7,8 @@ import {
   newCommit,
   rebaseCommit,
   restoreOperation,
+  getOperationPreview,
+  revertOperation,
   getFullDescription,
   describeCommit,
   bookmarkCreate,
@@ -65,6 +67,36 @@ export async function handleRequest(req: Request): Promise<Response> {
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
     try {
       return Response.json(await getOperationLog(cwd))
+    } catch (e) {
+      return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // GET /api/operations/:operationId/preview?cwd=...
+  if (req.method === 'GET' && url.pathname.startsWith('/api/operations/') && url.pathname.endsWith('/preview')) {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    const suffix = url.pathname.slice('/api/operations/'.length)
+    const operationId = decodeURIComponent(suffix.slice(0, -'/preview'.length))
+    if (!operationId) return Response.json({ error: 'operationId required' }, { status: 400 })
+    try {
+      return Response.json(await getOperationPreview(cwd, operationId))
+    } catch (e) {
+      return Response.json({ error: String(e) }, { status: 500 })
+    }
+  }
+
+  // POST /api/operations/:operationId/revert?cwd=...
+  if (req.method === 'POST' && url.pathname.startsWith('/api/operations/') && url.pathname.endsWith('/revert')) {
+    const cwd = getCwd(url)
+    if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    const suffix = url.pathname.slice('/api/operations/'.length)
+    const operationId = decodeURIComponent(suffix.slice(0, -'/revert'.length))
+    if (!operationId) return Response.json({ error: 'operationId required' }, { status: 400 })
+    try {
+      const result = await revertOperation(cwd, operationId)
+      notifyClients(cwd)
+      return Response.json({ ok: true, ...result })
     } catch (e) {
       return Response.json({ error: String(e) }, { status: 500 })
     }

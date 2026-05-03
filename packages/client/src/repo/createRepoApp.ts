@@ -10,6 +10,7 @@ import type {
   FetchState,
   MoveChangesState,
   OperationLogEntry,
+  OperationPreview,
   OperationKind,
   RecentOperation,
   PushResult,
@@ -65,6 +66,7 @@ export type RepoDialog =
   | { kind: 'confirm'; confirmKind: 'abandon'; changeId: string; description: string; scope: AbandonScope; commitCount: number }
   | { kind: 'confirm'; confirmKind: 'subtree-push'; bookmark: string }
   | { kind: 'confirm'; confirmKind: 'bookmark-backwards'; name: string; changeId: string }
+  | { kind: 'confirm'; confirmKind: 'operation-revert'; operationId: string; title: string; summary: string; preview: OperationPreview }
   | { kind: 'remote-select'; bookmark: string; remotes: string[]; scope: PushScope }
 
 export interface RepoSnapshot {
@@ -135,6 +137,7 @@ export interface RepoCommands {
   confirmMoveChanges(): Promise<void>
   undo(kind: UndoKind): Promise<void>
   restoreOperation(operationId: string): Promise<void>
+  startOperationRevert(operationId: string): Promise<void>
   fetchAll(): Promise<void>
   startPushBookmark(bookmark: string): Promise<void>
   startPushBookmarkSubtree(bookmark: string): void
@@ -256,6 +259,7 @@ class RepoSessionImpl implements RepoSession {
     confirmMoveChanges: () => this.confirmMoveChanges(),
     undo: (kind) => this.undo(kind),
     restoreOperation: (operationId) => this.restoreOperation(operationId),
+    startOperationRevert: (operationId) => this.startOperationRevert(operationId),
     fetchAll: () => this.fetchAll(),
     startPushBookmark: (bookmark) => this.startPushBookmark(bookmark),
     startPushBookmarkSubtree: (bookmark) => this.startPushBookmarkSubtree(bookmark),
@@ -1492,6 +1496,30 @@ class RepoSessionImpl implements RepoSession {
     }
   }
 
+  private async startOperationRevert(operationId: string): Promise<void> {
+    this.setErrorBanner(null)
+
+    try {
+      const preview = await this.api.previewOperationRevert(this.cwd, operationId)
+      const entry = this.state.resources.operations.items.find((item) => item.id === operationId)
+      const matchedOperation = this.state.recentOperations.find((operation) => operation.afterOpId === operationId)
+
+      this.setState((state) => ({
+        ...state,
+        dialog: {
+          kind: 'confirm',
+          confirmKind: 'operation-revert',
+          operationId,
+          title: matchedOperation?.title ?? entry?.description ?? 'Operation',
+          summary: matchedOperation?.summary ?? entry?.user ?? operationId,
+          preview,
+        },
+      }))
+    } catch (error) {
+      this.setErrorBanner(String(error))
+    }
+  }
+
   private async fetchAll(): Promise<void> {
     this.setState((state) => ({
       ...state,
@@ -1633,6 +1661,39 @@ class RepoSessionImpl implements RepoSession {
   private async confirmDialog(): Promise<void> {
     const dialog = this.state.dialog
     if (!dialog || dialog.kind !== 'confirm') return
+
+    if (dialog.confirmKind === 'operation-revert') {
+      this.setState((state) => ({
+        ...state,
+        dialog: null,
+      }))
+      const operationKey = this.startRecentOperation(
+        'revert',
+        'Reverting operation',
+        `${dialog.title}: ${dialog.summary}`,
+      )
+
+      try {
+        const result = await this.api.revertOperation(this.cwd, dialog.operationId)
+        this.setState((state) => ({
+          ...state,
+          rebase: idleRebaseState(),
+          moveChanges: idleMoveChangesState(),
+          fetchState: idleFetchState(),
+        }))
+        this.finishRecentOperation(operationKey, 'success', {
+          beforeOpId: result.beforeOpId,
+          afterOpId: result.afterOpId,
+        })
+        await this.refresh()
+      } catch (error) {
+        this.finishRecentOperation(operationKey, 'failed', {
+          details: String(error),
+        })
+        this.setErrorBanner(String(error))
+      }
+      return
+    }
 
     if (dialog.confirmKind === 'squash') {
       this.setState((state) => ({

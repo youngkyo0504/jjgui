@@ -1110,6 +1110,9 @@ body.drag-interaction-active {
   font-size: 12px;
   margin-bottom: 4px;
   word-break: break-word;
+  white-space: pre-wrap;
+  max-height: 360px;
+  overflow-y: auto;
 }
 
 .file-select-list {

@@ -63,11 +63,13 @@ function createFakeApi(overrides: Partial<RepoApiPort> = {}): RepoApiPort {
     loadChangedFiles: async () => [],
     loadBookmarks: async () => [],
     loadRemotes: async () => [],
+    previewOperationRevert: async (_cwd, operationId) => ({ operationId, summary: 'Changed commits:\n  M file.ts' }),
     edit: async () => undefined,
     createChild: async () => undefined,
     describe: async () => undefined,
     rebase: async () => ({ beforeOpId: 'rebase-op', afterOpId: 'rebase-after' }),
     undo: async () => undefined,
+    revertOperation: async () => ({ beforeOpId: 'revert-op', afterOpId: 'revert-after' }),
     split: async () => ({ beforeOpId: 'split-op', afterOpId: 'split-after' }),
     squash: async () => ({ beforeOpId: 'squash-op', afterOpId: 'squash-after' }),
     abandon: async () => ({ beforeOpId: 'abandon-op', afterOpId: 'abandon-after' }),
@@ -628,6 +630,58 @@ test('push flow opens remote selection when multiple remotes exist and stores su
     type: 'success',
     message: 'main pushed to origin',
     reviewUrl: 'https://example.com/merge_requests/new',
+  })
+  session.dispose()
+})
+
+test('operation revert asks for a preview before reverting a single operation', async () => {
+  const previewCalls: string[] = []
+  const revertCalls: string[] = []
+  const session = createRepoApp({
+    api: createFakeApi({
+      loadOperations: async () => [{
+        id: 'rebase-after',
+        user: 'tester@example.com',
+        description: 'rebase commit and descendants',
+        timestamp: '2026-04-04 10:00:00',
+        tags: 'args: jj rebase -s source -d target',
+        parentIds: ['rebase-before'],
+        isCurrent: true,
+        isSnapshot: false,
+        isRoot: false,
+      }],
+      previewOperationRevert: async (_cwd, operationId) => {
+        previewCalls.push(operationId)
+        return { operationId, summary: 'Changed commits:\n  M source' }
+      },
+      revertOperation: async (_cwd, operationId) => {
+        revertCalls.push(operationId)
+        return { beforeOpId: 'before-revert', afterOpId: 'after-revert' }
+      },
+    }),
+    events: createFakeEvents().events,
+  }).createSession('/repo')
+
+  session.commands.openOperationDrawer()
+  await Bun.sleep(0)
+  await session.commands.startOperationRevert('rebase-after')
+
+  expect(previewCalls).toEqual(['rebase-after'])
+  expect(session.getSnapshot().dialog).toMatchObject({
+    kind: 'confirm',
+    confirmKind: 'operation-revert',
+    operationId: 'rebase-after',
+    title: 'rebase commit and descendants',
+  })
+
+  await session.commands.confirmDialog()
+
+  expect(revertCalls).toEqual(['rebase-after'])
+  expect(session.getSnapshot().recentOperations[0]).toMatchObject({
+    kind: 'revert',
+    status: 'success',
+    beforeOpId: 'before-revert',
+    afterOpId: 'after-revert',
   })
   session.dispose()
 })

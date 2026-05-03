@@ -6,6 +6,7 @@ import type {
   CommitFileDiff,
   FetchRemoteResult,
   OperationLogEntry,
+  OperationPreview,
   OperationResult,
   PushScope,
 } from './types'
@@ -35,6 +36,7 @@ export interface RepoApiPort {
   loadCommitFileContent(cwd: string, changeId: string, path: string): Promise<CommitFileContents>
   loadBookmarks(cwd: string): Promise<string[]>
   loadRemotes(cwd: string): Promise<string[]>
+  previewOperationRevert(cwd: string, operationId: string): Promise<OperationPreview>
 
   edit(cwd: string, changeId: string): Promise<void>
   createChild(cwd: string, changeId: string): Promise<void>
@@ -44,6 +46,7 @@ export interface RepoApiPort {
     input: { sourceChangeId: string; destinationChangeId: string; mode: 'source' },
   ): Promise<OperationResult>
   undo(cwd: string, operationId: string): Promise<void>
+  revertOperation(cwd: string, operationId: string): Promise<OperationResult>
 
   split(cwd: string, input: { changeId: string; paths: string[] }): Promise<OperationResult>
   squash(cwd: string, changeId: string): Promise<OperationResult>

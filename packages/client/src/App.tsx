@@ -121,6 +121,7 @@ export default function App() {
           title={screen.confirmModal.title}
           message={screen.confirmModal.message}
           confirmLabel={screen.confirmModal.confirmLabel}
+          wide={screen.confirmModal.wide}
           onConfirm={screen.confirmModal.onConfirm}
           onCancel={screen.confirmModal.onCancel}
         />

@@ -66,7 +66,16 @@ export interface OperationLogEntry {
   user: string
   description: string
   timestamp: string
+  tags: string
+  parentIds: string[]
   isCurrent: boolean
+  isSnapshot: boolean
+  isRoot: boolean
+}
+
+export interface OperationPreview {
+  operationId: string
+  summary: string
 }
 
 export interface FetchAllRemotesResult {
@@ -125,7 +134,26 @@ const TEMPLATE = [
   'if(hidden, "true", "false")',
 ].join(' ++ ')
 
-const OP_LOG_TEMPLATE = 'self.id().short() ++ "\\0" ++ self.time().start().format("%Y-%m-%d %H:%M:%S") ++ "\\0" ++ self.user() ++ "\\0" ++ self.description().first_line() ++ "\\0" ++ if(self.current_operation(), "true", "false") ++ "\\n"'
+const OP_LOG_TEMPLATE = [
+  'self.id().short()',
+  '"\\0"',
+  'self.time().start().format("%Y-%m-%d %H:%M:%S")',
+  '"\\0"',
+  'self.user()',
+  '"\\0"',
+  'self.description().first_line()',
+  '"\\0"',
+  'self.tags()',
+  '"\\0"',
+  'self.parents().map(|p| p.id().short()).join(" ")',
+  '"\\0"',
+  'if(self.current_operation(), "true", "false")',
+  '"\\0"',
+  'if(self.snapshot(), "true", "false")',
+  '"\\0"',
+  'if(self.root(), "true", "false")',
+  '"\\n"',
+].join(' ++ ')
 
 function splitGraphAndData(line: string): { graphPrefix: string; data: string } {
   // commit 라인은 \x1f 구분자를 포함하므로, 첫 \x1f 앞의 changeId 시작 위치를 역추적
@@ -541,19 +569,33 @@ async function captureOperationResult(cwd: string, operation: () => Promise<void
 }
 
 export async function getOperationLog(cwd: string, limit = 30): Promise<OperationLogEntry[]> {
-  const result = await $`jj --ignore-working-copy op log --no-graph -T ${OP_LOG_TEMPLATE} --limit ${String(limit)}`.cwd(cwd).text()
+  const result = await $`jj --at-op=@ --ignore-working-copy op log --no-graph -T ${OP_LOG_TEMPLATE} --limit ${String(limit)}`.cwd(cwd).text()
 
   return result
     .split('\n')
     .filter(Boolean)
     .map((line) => {
-      const [id = '', timestamp = '', user = '', description = '', isCurrent = 'false'] = line.split('\0')
+      const [
+        id = '',
+        timestamp = '',
+        user = '',
+        description = '',
+        tags = '',
+        parentIdsRaw = '',
+        isCurrent = 'false',
+        isSnapshot = 'false',
+        isRoot = 'false',
+      ] = line.split('\0')
       return {
         id,
         timestamp,
         user,
         description,
+        tags,
+        parentIds: parentIdsRaw.split(/\s+/).filter(Boolean),
         isCurrent: isCurrent === 'true',
+        isSnapshot: isSnapshot === 'true',
+        isRoot: isRoot === 'true',
       }
     })
 }
@@ -574,6 +616,22 @@ export async function rebaseCommit(
 /** 특정 operation 상태로 복원한다 */
 export async function restoreOperation(cwd: string, operationId: string): Promise<void> {
   await $`jj op restore ${operationId}`.cwd(cwd)
+}
+
+/** 특정 operation을 되돌리기 전에 영향 요약을 가져온다 */
+export async function getOperationPreview(cwd: string, operationId: string): Promise<OperationPreview> {
+  const summary = await $`jj --at-op=@ --ignore-working-copy --color never op show --summary ${operationId}`.cwd(cwd).text()
+  return {
+    operationId,
+    summary: summary.trimEnd(),
+  }
+}
+
+/** 특정 operation 하나만 역적용한다 */
+export async function revertOperation(cwd: string, operationId: string): Promise<OperationResult> {
+  return captureOperationResult(cwd, async () => {
+    await $`jj op revert ${operationId}`.cwd(cwd)
+  })
 }
 
 /** 커밋의 전체 description을 가져온다 */

@@ -10,9 +10,11 @@ import type { RepoCommands, RepoDialog, RepoSnapshot } from './createRepoApp'
 import type {
   ChangedFile,
   DragPointer,
+  OperationLogEntry,
   OperationKind,
   OperationStatus,
   PushResult,
+  RecentOperation,
 } from './types'
 
 export interface InlineActionPanelViewModel {
@@ -115,8 +117,8 @@ export interface OperationItemViewModel {
   timestamp: string
   relativeTime: string
   details?: string
-  restoreOperationId?: string | null
-  onRestore?(): void
+  revertOperationId?: string | null
+  onRevert?(): void
 }
 
 export interface RepoScreenModel {
@@ -152,7 +154,7 @@ export interface RepoScreenModel {
     | { title: string; files: ChangedFile[]; minUnselected: number; onSubmit(paths: string[]): void; onCancel(): void }
     | null
   confirmModal:
-    | { title: string; message: string; confirmLabel: string; onConfirm(): void; onCancel(): void }
+    | { title: string; message: string; confirmLabel: string; wide?: boolean; onConfirm(): void; onCancel(): void }
     | null
   remoteSelect:
     | { title: string; remotes: string[]; onSelect(remote: string): void; onCancel(): void }
@@ -182,6 +184,8 @@ function getOperationVerb(kind: OperationKind): string {
       return 'Discarding...'
     case 'fetch':
       return 'Fetching...'
+    case 'revert':
+      return 'Reverting...'
     case 'restore':
       return 'Restoring...'
     default:
@@ -255,6 +259,26 @@ function buildDragPreview(snapshot: RepoSnapshot): DragPreviewViewModel | null {
 
 function buildConfirmModal(dialog: RepoDialog | null, commands: RepoCommands): RepoScreenModel['confirmModal'] {
   if (!dialog || dialog.kind !== 'confirm') return null
+
+  if (dialog.confirmKind === 'operation-revert') {
+    const preview = dialog.preview.summary.trim() || 'No changed commits or files were reported.'
+    return {
+      title: 'Revert operation?',
+      message: [
+        'This reverts only this operation. Later work stays in place. Conflicts may appear.',
+        '',
+        `Operation: ${dialog.title}`,
+        dialog.summary,
+        '',
+        'Preview:',
+        preview,
+      ].filter((line) => line !== undefined).join('\n'),
+      confirmLabel: 'Revert',
+      wide: true,
+      onConfirm: () => { void commands.confirmDialog() },
+      onCancel: commands.dismissDialog,
+    }
+  }
 
   if (dialog.confirmKind === 'squash') {
     return {
@@ -571,6 +595,50 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
   })
 }
 
+const RECOVERABLE_OPERATION_KINDS: ReadonlySet<OperationKind> = new Set([
+  'rebase',
+  'move-changes',
+  'split',
+  'squash',
+  'abandon',
+  'abandon-subtree',
+  'discard-file',
+])
+
+function looksLikeFetchOrGitRefOperation(entry: OperationLogEntry): boolean {
+  const text = `${entry.description}\n${entry.tags}`.toLowerCase()
+  return (
+    text.includes('fetch')
+    || text.includes('import git refs')
+    || text.includes('export git refs')
+    || text.includes('git fetch')
+    || text.includes('git push')
+    || text.includes('remote-tracking')
+  )
+}
+
+function looksLikeRecoveryOperation(entry: OperationLogEntry): boolean {
+  const text = `${entry.description}\n${entry.tags}`.toLowerCase()
+  return text.includes('restore operation') || text.includes('revert operation')
+}
+
+function getRevertOperationId(
+  operation: RecentOperation | undefined,
+  entry: OperationLogEntry | undefined,
+): string | null {
+  if (operation) {
+    if (operation.status !== 'success') return null
+    if (!operation.afterOpId) return null
+    if (!RECOVERABLE_OPERATION_KINDS.has(operation.kind)) return null
+    return operation.afterOpId
+  }
+
+  if (!entry) return null
+  if (entry.isSnapshot || entry.isRoot) return null
+  if (looksLikeFetchOrGitRefOperation(entry) || looksLikeRecoveryOperation(entry)) return null
+  return entry.id
+}
+
 function buildOperationItems(snapshot: RepoSnapshot, commands: RepoCommands): OperationItemViewModel[] {
   const operationItems: OperationItemViewModel[] = []
   const opLogById = new Map(snapshot.resources.operations.items.map((item) => [item.id, item]))
@@ -580,6 +648,7 @@ function buildOperationItems(snapshot: RepoSnapshot, commands: RepoCommands): Op
       continue
     }
 
+    const revertOperationId = getRevertOperationId(operation, undefined)
     operationItems.push({
       key: operation.key,
       status: operation.status,
@@ -588,13 +657,15 @@ function buildOperationItems(snapshot: RepoSnapshot, commands: RepoCommands): Op
       timestamp: operation.timestamp,
       relativeTime: formatRelativeTime(operation.timestamp),
       details: operation.details,
-      restoreOperationId: operation.status === 'success' ? operation.beforeOpId ?? null : null,
-      onRestore: operation.beforeOpId ? () => { void commands.restoreOperation(operation.beforeOpId!) } : undefined,
+      revertOperationId,
+      onRevert: revertOperationId ? () => { void commands.startOperationRevert(revertOperationId) } : undefined,
     })
   }
 
   for (const entry of snapshot.resources.operations.items) {
     const matched = snapshot.recentOperations.find((operation) => operation.afterOpId === entry.id)
+    const revertOperationId = getRevertOperationId(matched, entry)
+    const details = matched?.details ?? (entry.tags.trim() ? entry.tags : undefined)
     operationItems.push({
       key: entry.id,
       status: matched?.status ?? 'success',
@@ -602,9 +673,9 @@ function buildOperationItems(snapshot: RepoSnapshot, commands: RepoCommands): Op
       summary: matched?.summary ?? entry.user,
       timestamp: entry.timestamp,
       relativeTime: formatRelativeTime(entry.timestamp),
-      details: matched?.details,
-      restoreOperationId: matched?.beforeOpId ?? null,
-      onRestore: matched?.beforeOpId ? () => { void commands.restoreOperation(matched.beforeOpId!) } : undefined,
+      details,
+      revertOperationId,
+      onRevert: revertOperationId ? () => { void commands.startOperationRevert(revertOperationId) } : undefined,
     })
   }
 

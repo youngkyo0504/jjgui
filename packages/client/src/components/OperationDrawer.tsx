@@ -42,10 +42,10 @@ export default function OperationDrawer({ isOpen, items, loading, onClose }: Pro
                   <pre>{item.details}</pre>
                 </details>
               )}
-              {item.restoreOperationId && item.onRestore && (
+              {item.revertOperationId && item.onRevert && (
                 <div className="operation-item-actions">
-                  <button className="describe-btn describe-btn--save" onClick={item.onRestore}>
-                    Restore
+                  <button className="describe-btn describe-btn--save" onClick={item.onRevert}>
+                    Revert
                   </button>
                 </div>
               )}

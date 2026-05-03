@@ -7,6 +7,7 @@ import type {
   AbandonScope,
   FetchRemoteResult,
   OperationLogEntry,
+  OperationPreview,
   OperationResult,
   PushScope,
 } from './types'
@@ -102,6 +103,10 @@ export function createHttpRepoApi(): RepoApiPort {
       return data.remotes ?? []
     },
 
+    previewOperationRevert(cwd, operationId) {
+      return requestJson<OperationPreview>(`/api/operations/${encodeURIComponent(operationId)}/preview`, cwd)
+    },
+
     edit(cwd, changeId) {
       return requestVoid('/api/edit', cwd, jsonBody({ changeId }))
     },
@@ -120,6 +125,10 @@ export function createHttpRepoApi(): RepoApiPort {
 
     undo(cwd, operationId) {
       return requestVoid('/api/undo', cwd, jsonBody({ operationId }))
+    },
+
+    revertOperation(cwd, operationId) {
+      return requestJson<OperationResult>(`/api/operations/${encodeURIComponent(operationId)}/revert`, cwd, jsonBody({}))
     },
 
     split(cwd, input) {
