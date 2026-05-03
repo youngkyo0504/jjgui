@@ -99,6 +99,8 @@ export default function FileList({
   if (moveSelection) {
     const selected = new Set(moveSelection.selectedPaths)
     const allSelected = files.length > 0 && selected.size === files.length
+    const fileCountLabel = `${files.length} file${files.length === 1 ? '' : 's'} changed`
+    const selectedCountLabel = `${selected.size} selected`
 
     const updateSelection = (next: Set<string>) => {
       moveSelection.onSelectionChange([...next])
@@ -117,43 +119,54 @@ export default function FileList({
 
     return (
       <div className="file-list file-list--selecting">
-        <div className="file-selection-summary">Select files to move from this commit</div>
+        <div className="file-workbench-header">
+          <div>
+            <div className="file-workbench-title">{fileCountLabel}</div>
+            <div className="file-workbench-meta">{selectedCountLabel}</div>
+          </div>
+          <div className="file-workbench-actions">
+            <button
+              className="describe-btn describe-btn--save"
+              onClick={moveSelection.onContinue}
+              disabled={selected.size === 0 || loading}
+            >
+              Move selected
+            </button>
+            <button className="describe-btn describe-btn--cancel" onClick={moveSelection.onCancel}>
+              Cancel
+            </button>
+          </div>
+        </div>
         {loading && <div className="file-list-loading">refreshing changed files...</div>}
         {files.length > 0 && (
-          <div className="file-select-list file-select-list--inline">
+          <div className="file-workbench-list file-workbench-list--selecting">
             <label className="file-select-item file-select-item--all">
-              <input type="checkbox" checked={allSelected} onChange={toggleAll} disabled={loading} />
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                disabled={loading}
+                aria-label={allSelected ? 'Deselect all files' : 'Select all files'}
+              />
               <span className="file-select-label">Select all ({files.length} files)</span>
             </label>
             {files.map((file) => (
-              <label key={file.path} className="file-select-item">
+              <div key={file.path} className="file-select-item">
                 <input
                   type="checkbox"
                   checked={selected.has(file.path)}
                   onChange={() => toggleFile(file.path)}
                   disabled={loading}
+                  aria-label={`Select ${file.path}`}
                 />
                 <span className={`file-status file-status--${file.status}`}>{file.status}</span>
                 <span className="file-select-path">{file.path}</span>
-              </label>
+              </div>
             ))}
           </div>
         )}
         {!loading && files.length === 0 && <div className="file-list-empty">no changed files</div>}
         {moveSelection.notice && <div className="file-selection-note">{moveSelection.notice}</div>}
-        <div className="file-selection-actions">
-          <span className="file-selection-count">{selected.size} selected</span>
-          <button
-            className="describe-btn describe-btn--save"
-            onClick={moveSelection.onContinue}
-            disabled={selected.size === 0 || loading}
-          >
-            Continue
-          </button>
-          <button className="describe-btn describe-btn--cancel" onClick={moveSelection.onCancel}>
-            Cancel
-          </button>
-        </div>
       </div>
     )
   }
@@ -163,28 +176,40 @@ export default function FileList({
 
   return (
     <div className={`file-list${readOnly ? ' file-list--readonly' : ''}`}>
+      <div className="file-workbench-header">
+        <div>
+          <div className="file-workbench-title">
+            {files.length} file{files.length === 1 ? '' : 's'} changed
+          </div>
+          <div className="file-workbench-meta">
+            Right-click a file for more actions.
+          </div>
+        </div>
+      </div>
       {readOnly && (
         <div className="file-list-note">Resolve conflicted files in the terminal.</div>
       )}
-      {files.map((file) => (
-        <DraggableFileItem
-          key={file.path}
-          file={file}
-          actionsDisabled={actionsDisabled}
-          readOnly={readOnly}
-          isDragSource={dragSourcePaths.includes(file.path)}
-          onFileDragStart={onFileDragStart}
-          onDragMove={onDragMove}
-          onDragDrop={onDragDrop}
-          onDragCancel={onDragCancel}
-          onContextMenu={(event) => {
-            if (actionsDisabled || readOnly) return
-            event.preventDefault()
-            event.stopPropagation()
-            setContextMenu({ x: event.clientX, y: event.clientY, file })
-          }}
-        />
-      ))}
+      <div className="file-workbench-list">
+        {files.map((file) => (
+          <DraggableFileItem
+            key={file.path}
+            file={file}
+            actionsDisabled={actionsDisabled}
+            readOnly={readOnly}
+            isDragSource={dragSourcePaths.includes(file.path)}
+            onFileDragStart={onFileDragStart}
+            onDragMove={onDragMove}
+            onDragDrop={onDragDrop}
+            onDragCancel={onDragCancel}
+            onContextMenu={(event) => {
+              if (actionsDisabled || readOnly) return
+              event.preventDefault()
+              event.stopPropagation()
+              setContextMenu({ x: event.clientX, y: event.clientY, file })
+            }}
+          />
+        ))}
+      </div>
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}

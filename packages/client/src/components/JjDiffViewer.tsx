@@ -22,16 +22,17 @@ const DIFF_THEMES = {
 } as const
 
 function getResolvedMode(): 'dark' | 'light' {
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  return 'light'
 }
 
 function readPierreTheme(): PierreTheme {
   const styles = getComputedStyle(document.documentElement)
-  const bg = styles.getPropertyValue('--bg').trim() || '#1a1b26'
-  const surface = styles.getPropertyValue('--bg-surface').trim() || '#24283b'
-  const fg = styles.getPropertyValue('--fg').trim() || '#c0caf5'
-  const fgDim = styles.getPropertyValue('--fg-dim').trim() || '#565f89'
-  const border = styles.getPropertyValue('--border').trim() || '#292e42'
+  const bg = styles.getPropertyValue('--bg').trim() || '#fdfcfc'
+  const surface = styles.getPropertyValue('--bg-surface').trim() || '#ffffff'
+  const fg = styles.getPropertyValue('--fg').trim() || '#000000'
+  const fgDim = styles.getPropertyValue('--fg-dim').trim() || '#a59f97'
+  const border = styles.getPropertyValue('--border').trim() || '#e5e5e5'
+  const mono = styles.getPropertyValue('--font-geist-mono').trim() || 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
 
   return {
     type: getResolvedMode(),
@@ -46,7 +47,7 @@ function readPierreTheme(): PierreTheme {
       }
       pre, code {
         background-color: ${bg} !important;
-        font-family: inherit !important;
+        font-family: ${mono} !important;
         font-size: 12px !important;
         line-height: 1.55 !important;
       }
@@ -107,11 +108,7 @@ export default function JjDiffViewer({
   }, [canExpandContext, fileDiff, filePath, newContent, oldContent, oldPath, patch])
 
   useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: light)')
-    const onChange = () => setTheme(readPierreTheme())
     setTheme(readPierreTheme())
-    media.addEventListener('change', onChange)
-    return () => media.removeEventListener('change', onChange)
   }, [])
 
   useEffect(() => {

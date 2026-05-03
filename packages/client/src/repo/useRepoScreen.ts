@@ -118,7 +118,17 @@ export interface OperationItemViewModel {
   relativeTime: string
   details?: string
   revertOperationId?: string | null
-  onRevert?(): void
+  onPreviewRevert?(): void
+  revertPreview?: {
+    status: 'loading' | 'ready' | 'failed'
+    operationId: string
+    title: string
+    summary: string
+    previewSummary?: string
+    error?: string
+    onCancel(): void
+    onConfirm?(): void
+  } | null
 }
 
 export interface RepoScreenModel {
@@ -639,6 +649,26 @@ function getRevertOperationId(
   return entry.id
 }
 
+function buildRevertPreview(
+  snapshot: RepoSnapshot,
+  commands: RepoCommands,
+  operationId: string | null,
+): OperationItemViewModel['revertPreview'] {
+  const preview = snapshot.operationRevertPreview
+  if (!operationId || !preview || preview.operationId !== operationId) return null
+
+  return {
+    status: preview.status,
+    operationId: preview.operationId,
+    title: preview.title,
+    summary: preview.summary,
+    previewSummary: preview.status === 'ready' ? preview.preview.summary.trim() : undefined,
+    error: preview.status === 'failed' ? preview.error : undefined,
+    onCancel: commands.cancelOperationRevertPreview,
+    onConfirm: preview.status === 'ready' ? commands.confirmOperationRevertPreview : undefined,
+  }
+}
+
 function buildOperationItems(snapshot: RepoSnapshot, commands: RepoCommands): OperationItemViewModel[] {
   const operationItems: OperationItemViewModel[] = []
   const opLogById = new Map(snapshot.resources.operations.items.map((item) => [item.id, item]))
@@ -658,12 +688,17 @@ function buildOperationItems(snapshot: RepoSnapshot, commands: RepoCommands): Op
       relativeTime: formatRelativeTime(operation.timestamp),
       details: operation.details,
       revertOperationId,
-      onRevert: revertOperationId ? () => { void commands.startOperationRevert(revertOperationId) } : undefined,
+      onPreviewRevert: revertOperationId ? () => { void commands.startOperationRevert(revertOperationId) } : undefined,
+      revertPreview: buildRevertPreview(snapshot, commands, revertOperationId),
     })
   }
 
   for (const entry of snapshot.resources.operations.items) {
     const matched = snapshot.recentOperations.find((operation) => operation.afterOpId === entry.id)
+    if (!matched && (entry.isSnapshot || entry.isRoot)) {
+      continue
+    }
+
     const revertOperationId = getRevertOperationId(matched, entry)
     const details = matched?.details ?? (entry.tags.trim() ? entry.tags : undefined)
     operationItems.push({
@@ -675,7 +710,8 @@ function buildOperationItems(snapshot: RepoSnapshot, commands: RepoCommands): Op
       relativeTime: formatRelativeTime(entry.timestamp),
       details,
       revertOperationId,
-      onRevert: revertOperationId ? () => { void commands.startOperationRevert(revertOperationId) } : undefined,
+      onPreviewRevert: revertOperationId ? () => { void commands.startOperationRevert(revertOperationId) } : undefined,
+      revertPreview: buildRevertPreview(snapshot, commands, revertOperationId),
     })
   }
 

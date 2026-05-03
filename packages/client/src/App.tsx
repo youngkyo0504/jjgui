@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CommitInfo } from './types'
 import CommitDiffScreen from './components/CommitDiffScreen'
 import LogView from './components/LogView'
@@ -13,8 +13,33 @@ import { useRepoScreen } from './repo/useRepoScreen'
 import { parseAppRoute } from './utils/commitDiffRoute'
 import './components/styles.css'
 
+function normalizePath(path: string): string {
+  return path.replace(/[\\/]+$/, '')
+}
+
+function getRepoName(cwd: string): string {
+  const normalized = normalizePath(cwd)
+  if (!normalized) return 'jjgui'
+  const name = normalized.split(/[\\/]/).filter(Boolean).at(-1) ?? normalized
+  return name === 'visual-jj-webview' ? 'jjgui' : name
+}
+
+function formatRepoPath(cwd: string): string {
+  const normalized = normalizePath(cwd)
+  if (!normalized) return ''
+
+  const unixHomeMatch = normalized.match(/^\/(?:Users|home)\/[^/]+(?=\/|$)/)
+  if (unixHomeMatch) {
+    return normalized.replace(unixHomeMatch[0], '~')
+  }
+
+  return normalized
+}
+
 export default function App() {
   const [route, setRoute] = useState(() => parseAppRoute(window.location.search))
+  const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false)
+  const toolbarActionsRef = useRef<HTMLDivElement>(null)
   const cwd = new URLSearchParams(window.location.search).get('cwd') ?? ''
   const screen = useRepoScreen(cwd)
 
@@ -24,10 +49,36 @@ export default function App() {
     return () => window.removeEventListener('popstate', syncRoute)
   }, [])
 
+  useEffect(() => {
+    if (!toolbarMenuOpen) return
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof Node && toolbarActionsRef.current?.contains(target)) return
+      setToolbarMenuOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setToolbarMenuOpen(false)
+    }
+
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [toolbarMenuOpen])
+
   const commits = useMemo(
     () => screen.logRows.flatMap((row) => (row.type === 'commit' ? [row.row.commit] : [])) as CommitInfo[],
     [screen.logRows],
   )
+  const repoName = useMemo(() => getRepoName(screen.toolbar.cwd), [screen.toolbar.cwd])
+  const repoPath = useMemo(() => formatRepoPath(screen.toolbar.cwd), [screen.toolbar.cwd])
+  const surfacedOperation = screen.toolbar.operationsChip.status === 'running'
+    || screen.toolbar.operationsChip.status === 'failed'
+    ? screen.toolbar.operationsChip
+    : null
 
   if (screen.appError) return <div className="app-error">Error: {screen.appError}</div>
 
@@ -48,28 +99,68 @@ export default function App() {
   return (
     <div className="app">
       <div className="app-toolbar">
-        <div className="app-header">visual-jj — {screen.toolbar.cwd}</div>
-        {screen.toolbar.hasRemoteBookmarks && (
+        <div className="app-toolbar-identity">
+          <div className="app-toolbar-title">{repoName}</div>
+          {repoPath && <div className="app-toolbar-path" title={screen.toolbar.cwd}>{repoPath}</div>}
+        </div>
+        <div className="app-toolbar-actions" ref={toolbarActionsRef}>
+          {surfacedOperation && (
+            <button
+              className={`app-toolbar-status app-toolbar-status--${surfacedOperation.status}`}
+              onClick={surfacedOperation.onClick}
+            >
+              {surfacedOperation.label}
+            </button>
+          )}
           <button
-            className={`app-toolbar-btn ${screen.toolbar.showRemoteBookmarks ? 'app-toolbar-btn--active' : ''}`}
-            onClick={screen.toolbar.onToggleRemoteBookmarks}
+            className="app-toolbar-menu-btn"
+            aria-label="Open toolbar actions"
+            aria-expanded={toolbarMenuOpen}
+            onClick={() => setToolbarMenuOpen((open) => !open)}
           >
-            Remote refs {screen.toolbar.showRemoteBookmarks ? 'On' : 'Off'}
+            &middot;&middot;&middot;
           </button>
-        )}
-        <button
-          className="app-toolbar-btn"
-          onClick={screen.toolbar.onFetch}
-          disabled={screen.toolbar.fetchDisabled}
-        >
-          {screen.toolbar.fetchLabel}
-        </button>
-        <button
-          className={`app-toolbar-btn app-toolbar-btn--ops app-toolbar-btn--ops-${screen.toolbar.operationsChip.status}`}
-          onClick={screen.toolbar.operationsChip.onClick}
-        >
-          {screen.toolbar.operationsChip.label}
-        </button>
+          {toolbarMenuOpen && (
+            <div className="app-toolbar-menu" role="menu">
+              {screen.toolbar.hasRemoteBookmarks && (
+                <button
+                  className={`app-toolbar-menu-item ${screen.toolbar.showRemoteBookmarks ? 'app-toolbar-menu-item--active' : ''}`}
+                  onClick={() => {
+                    screen.toolbar.onToggleRemoteBookmarks()
+                    setToolbarMenuOpen(false)
+                  }}
+                  role="menuitem"
+                >
+                  <span>Remote refs</span>
+                  <span>{screen.toolbar.showRemoteBookmarks ? 'On' : 'Off'}</span>
+                </button>
+              )}
+              <button
+                className="app-toolbar-menu-item"
+                onClick={() => {
+                  screen.toolbar.onFetch()
+                  setToolbarMenuOpen(false)
+                }}
+                disabled={screen.toolbar.fetchDisabled}
+                role="menuitem"
+              >
+                <span>Fetch</span>
+                <span>{screen.toolbar.fetchLabel}</span>
+              </button>
+              <button
+                className={`app-toolbar-menu-item app-toolbar-menu-item--ops-${screen.toolbar.operationsChip.status}`}
+                onClick={() => {
+                  screen.toolbar.operationsChip.onClick()
+                  setToolbarMenuOpen(false)
+                }}
+                role="menuitem"
+              >
+                <span>Operations</span>
+                <span>{screen.toolbar.operationsChip.label}</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {screen.errorBanner && (

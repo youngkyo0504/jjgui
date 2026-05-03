@@ -667,6 +667,15 @@ test('operation revert asks for a preview before reverting a single operation', 
   await session.commands.startOperationRevert('rebase-after')
 
   expect(previewCalls).toEqual(['rebase-after'])
+  expect(session.getSnapshot().operationRevertPreview).toMatchObject({
+    status: 'ready',
+    operationId: 'rebase-after',
+    title: 'rebase commit and descendants',
+  })
+  expect(session.getSnapshot().dialog).toBe(null)
+
+  session.commands.confirmOperationRevertPreview()
+
   expect(session.getSnapshot().dialog).toMatchObject({
     kind: 'confirm',
     confirmKind: 'operation-revert',
@@ -683,6 +692,7 @@ test('operation revert asks for a preview before reverting a single operation', 
     beforeOpId: 'before-revert',
     afterOpId: 'after-revert',
   })
+  expect(session.getSnapshot().operationRevertPreview).toBe(null)
   session.dispose()
 })
 
