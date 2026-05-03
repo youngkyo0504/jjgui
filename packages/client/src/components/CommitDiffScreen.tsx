@@ -347,10 +347,6 @@ export default function CommitDiffScreen({ cwd, route, commits }: Props) {
   const toggleFolder = (path: string) => {
     setExpandedFolders((previous) => {
       const next = new Set(previous)
-      if (selectedPath?.startsWith(`${path}/`)) {
-        next.add(path)
-        return next
-      }
       if (next.has(path)) next.delete(path)
       else next.add(path)
       return next
