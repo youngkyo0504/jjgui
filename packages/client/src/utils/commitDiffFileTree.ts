@@ -85,6 +85,27 @@ export function buildCommitDiffFileTree(files: ChangedFile[]): CommitDiffTreeNod
   return freezeFolder(root).children
 }
 
+function compactFolderNode(node: CommitDiffFolderNode): CommitDiffFolderNode {
+  const names = [node.name]
+  let current = node
+
+  while (current.children.length === 1 && current.children[0].kind === 'folder') {
+    current = current.children[0]
+    names.push(current.name)
+  }
+
+  return {
+    kind: 'folder',
+    name: names.join('/'),
+    path: current.path,
+    children: compactCommitDiffFileTree(current.children),
+  }
+}
+
+export function compactCommitDiffFileTree(nodes: CommitDiffTreeNode[]): CommitDiffTreeNode[] {
+  return nodes.map((node) => (node.kind === 'folder' ? compactFolderNode(node) : node))
+}
+
 export function collectFolderPaths(nodes: CommitDiffTreeNode[]): string[] {
   const result: string[] = []
 

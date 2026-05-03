@@ -6,6 +6,7 @@ import type { ChangedFile, CommitFileContents, CommitFileDiff } from '../repo/ty
 import type { CommitDiffTreeNode } from '../utils/commitDiffFileTree'
 import {
   buildCommitDiffFileTree,
+  compactCommitDiffFileTree,
   collectFolderPaths,
   getAncestorFolderPaths,
 } from '../utils/commitDiffFileTree'
@@ -90,6 +91,10 @@ function CommitDiffTree({
         if (node.kind === 'folder') {
           const isExpanded = expandedFolders.has(node.path)
           const containsSelected = selectedPath?.startsWith(`${node.path}/`) ?? false
+          const folderNameClass = [
+            'commit-diff-folder-name',
+            node.name.includes('/') && 'commit-diff-folder-name--compact',
+          ].filter(Boolean).join(' ')
 
           return (
             <div key={node.path} className="commit-diff-tree-node">
@@ -102,11 +107,12 @@ function CommitDiffTree({
                 onClick={() => onToggleFolder(node.path)}
                 style={{ '--tree-depth': depth } as CSSProperties}
                 title={node.path}
+                aria-expanded={isExpanded}
               >
                 <span className={`commit-diff-folder-chevron${isExpanded ? ' commit-diff-folder-chevron--expanded' : ''}`}>
                   ▸
                 </span>
-                <span className="commit-diff-folder-name">{node.name}</span>
+                <span className={folderNameClass}>{node.name}</span>
               </button>
               {isExpanded && (
                 <div className="commit-diff-tree-children">
@@ -194,7 +200,8 @@ export default function CommitDiffScreen({ cwd, route, commits }: Props) {
   }, [api, cwd, route.changeId])
 
   const files = filesState.value
-  const fileTree = useMemo(() => buildCommitDiffFileTree(files), [files])
+  const rawFileTree = useMemo(() => buildCommitDiffFileTree(files), [files])
+  const fileTree = useMemo(() => compactCommitDiffFileTree(rawFileTree), [rawFileTree])
   const allFolderPaths = useMemo(() => collectFolderPaths(fileTree), [fileTree])
   const selectedPath = useMemo(() => {
     if (files.length === 0) return null
@@ -340,6 +347,10 @@ export default function CommitDiffScreen({ cwd, route, commits }: Props) {
   const toggleFolder = (path: string) => {
     setExpandedFolders((previous) => {
       const next = new Set(previous)
+      if (selectedPath?.startsWith(`${path}/`)) {
+        next.add(path)
+        return next
+      }
       if (next.has(path)) next.delete(path)
       else next.add(path)
       return next

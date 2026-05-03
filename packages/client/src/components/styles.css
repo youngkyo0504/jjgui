@@ -1590,6 +1590,11 @@ body.drag-interaction-active {
   font-weight: 600;
 }
 
+.commit-diff-folder-name--compact {
+  direction: rtl;
+  text-align: left;
+}
+
 .commit-diff-file-name {
   color: var(--fg-muted);
   flex: 1;
