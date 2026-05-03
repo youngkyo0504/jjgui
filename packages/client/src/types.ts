@@ -19,6 +19,7 @@ export interface CommitInfo {
   hasConflict: boolean
   isEmpty: boolean
   isHidden: boolean
+  isDivergent: boolean
 }
 
 export interface GraphRow {

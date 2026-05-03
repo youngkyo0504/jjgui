@@ -14,6 +14,7 @@ export interface CommitInfo {
   hasConflict: boolean
   isEmpty: boolean
   isHidden: boolean
+  isDivergent: boolean
 }
 
 export interface BookmarkRef {
@@ -105,7 +106,7 @@ const BRANCH_END_CHARS = new Set(['╯', '╰', '┘', '└'])
 const HORIZONTAL_CHARS = new Set(['─', '━', '╶', '╴', '╼', '╾'])
 
 const TEMPLATE = [
-  'change_id.short()',
+  'change_id.shortest(8) ++ if(divergent, "/" ++ self.change_offset(), "")',
   '"\x1f"',
   'commit_id.short()',
   '"\x1f"',
@@ -123,7 +124,7 @@ const TEMPLATE = [
   '"\x1f"',
   'remote_bookmarks.map(|b| b.remote()).join(" ")',
   '"\x1f"',
-  'parents.map(|p| p.change_id().short()).join(" ")',
+  'parents.map(|p| p.change_id().shortest(8) ++ if(p.divergent(), "/" ++ p.change_offset(), "")).join(" ")',
   '"\x1f"',
   'immutable',
   '"\x1f"',
@@ -132,6 +133,8 @@ const TEMPLATE = [
   'empty',
   '"\x1f"',
   'if(hidden, "true", "false")',
+  '"\x1f"',
+  'if(divergent, "true", "false")',
 ].join(' ++ ')
 
 const OP_LOG_TEMPLATE = [
@@ -160,9 +163,9 @@ function splitGraphAndData(line: string): { graphPrefix: string; data: string } 
   const sepIdx = line.indexOf('\x1f')
   if (sepIdx !== -1) {
     // The changeId sits before \x1f, and the graph prefix sits before that.
-    // changeIds contain lowercase ASCII letters, so find where that run starts.
+    // Divergent changes are selected with a change offset, e.g. `klyxqxqr/0`.
     let dataStart = sepIdx
-    while (dataStart > 0 && /[a-z]/.test(line[dataStart - 1])) {
+    while (dataStart > 0 && /[a-z0-9/]/.test(line[dataStart - 1])) {
       dataStart--
     }
     return {
@@ -212,6 +215,7 @@ function parseCommitData(data: string, graphPrefix: string): CommitInfo {
     hasConflict: fields[11] === 'true',
     isEmpty: fields[12] === 'true',
     isHidden: fields[13] === 'true',
+    isDivergent: fields[14] === 'true',
   }
 }
 

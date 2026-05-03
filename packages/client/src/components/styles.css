@@ -487,6 +487,11 @@ body.drag-interaction-active {
   color: var(--red);
 }
 
+.badge--divergent {
+  --badge-dot: var(--orange);
+  color: var(--orange);
+}
+
 .badge--empty {
   --badge-dot: var(--color-fog);
   color: var(--fg-muted);

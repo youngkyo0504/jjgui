@@ -23,6 +23,7 @@ function makeCommitRow(changeId: string, parents: string[] = []): GraphRow {
       hasConflict: false,
       isEmpty: false,
       isHidden: false,
+      isDivergent: false,
     },
   }
 }

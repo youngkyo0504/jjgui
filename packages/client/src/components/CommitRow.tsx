@@ -69,6 +69,7 @@ export default function CommitRow({ row }: Props) {
   ].filter(Boolean).join(' ')
 
   const isAnyMoveMode = row.state.isRebaseMode || row.state.isMoveChangesMode || !!row.moveSelection
+  const displayChangeId = row.commit.isDivergent ? row.commit.changeId : row.commit.changeId.slice(0, 3)
   const commitDropTargetProps = {
     'data-commit-drop-target': 'true',
     'data-change-id': row.commit.changeId,
@@ -104,6 +105,7 @@ export default function CommitRow({ row }: Props) {
             </span>
           ))}
           {row.commit.hasConflict && <Badge label="conflict" variant="conflict" />}
+          {row.commit.isDivergent && <Badge label="divergent" variant="divergent" />}
           {row.commit.isEmpty && <Badge label="empty" variant="empty" />}
 
           {!isAnyMoveMode && (
@@ -118,7 +120,7 @@ export default function CommitRow({ row }: Props) {
           )}
           <span className="commit-description">{row.commit.description}</span>
           <span className="commit-timestamp">{formatRelativeTime(row.commit.timestamp)}</span>
-          <span className="commit-change-id">{row.commit.changeId.slice(0, 3)}</span>
+          <span className="commit-change-id" title={row.commit.changeId}>{displayChangeId}</span>
         </div>
       </div>
 

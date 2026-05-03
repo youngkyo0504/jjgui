@@ -3,7 +3,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { computeGraphLaneColorRows, getChangedFiles, getCommitFileContents, getCommitFileDiff } from './jj'
+import { computeGraphLaneColorRows, getChangedFiles, getCommitFileContents, getCommitFileDiff, getGraphLog } from './jj'
 
 const tempDirs: string[] = []
 
@@ -84,6 +84,24 @@ async function createCommitDiffRepo(): Promise<{
   return { cwd, baseChangeId, addModifyChangeId, deleteChangeId, mergeChangeId }
 }
 
+async function createDivergentRepo(): Promise<{ cwd: string }> {
+  const dir = mkdtempSync(join(tmpdir(), 'visual-jj-divergent-'))
+  tempDirs.push(dir)
+
+  await $`jj git init repo`.cwd(dir).quiet()
+  const cwd = join(dir, 'repo')
+
+  writeFileSync(join(cwd, 'file.txt'), 'base\n')
+  await $`jj describe -m original`.cwd(cwd).quiet()
+  const changeId = (await $`jj log -r @ --no-graph -T 'change_id.shortest(8)'`.cwd(cwd).text()).trim()
+  const baseOpId = (await $`jj op log --no-graph -T 'self.id().short() ++ "\n"' --limit 1`.cwd(cwd).text()).trim()
+
+  await $`jj describe -m left`.cwd(cwd).quiet()
+  await $`jj --at-op=${baseOpId} describe -r ${changeId} -m right`.cwd(cwd).quiet()
+
+  return { cwd }
+}
+
 test('getChangedFiles marks clean commits with isConflict=false', async () => {
   const repo = await createConflictRepo()
 
@@ -98,6 +116,22 @@ test('getChangedFiles marks conflicted files using `jj resolve --list`', async (
   await expect(getChangedFiles(repo.cwd, repo.leftChangeId)).resolves.toEqual([
     { path: 'file.txt', status: 'M', isConflict: true },
   ])
+})
+
+test('getGraphLog uses change offsets for divergent changes', async () => {
+  const repo = await createDivergentRepo()
+  const rows = await getGraphLog(repo.cwd)
+  const commits = rows.flatMap((row) => row.type === 'commit' && row.commit?.isDivergent ? [row.commit] : [])
+
+  expect(commits).toHaveLength(2)
+  expect(new Set(commits.map((commit) => commit.changeId)).size).toBe(2)
+  expect(commits.every((commit) => /\/\d+$/.test(commit.changeId))).toBe(true)
+
+  for (const commit of commits) {
+    await expect(getChangedFiles(repo.cwd, commit.changeId)).resolves.toEqual([
+      { path: 'file.txt', status: 'A', isConflict: false },
+    ])
+  }
 })
 
 test('computeGraphLaneColorRows assigns colors by nesting depth, not branch lifetime', () => {
