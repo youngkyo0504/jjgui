@@ -11,11 +11,15 @@ export interface CmuxConfig {
 }
 
 export interface JjguiConfig {
+  port: number
   opener: 'auto' | 'browser' | 'cmux'
   cmux: CmuxConfig
 }
 
+export const DEFAULT_PORT = 7777
+
 const DEFAULT_CONFIG: JjguiConfig = {
+  port: DEFAULT_PORT,
   opener: 'auto',
   cmux: {
     openMode: 'tab',
@@ -58,29 +62,42 @@ function parseSimpleToml(content: string): Record<string, any> {
   return result
 }
 
+function parsePort(value: unknown): number | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined
+  const port = Number(value)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return undefined
+  return port
+}
+
 export function loadConfig(): JjguiConfig {
   const configPath = join(homedir(), '.jjgui', 'config.toml')
   try {
     const content = readFileSync(configPath, 'utf-8')
-    const parsed = parseSimpleToml(content)
-
-    const opener = ['auto', 'browser', 'cmux'].includes(parsed.opener)
-      ? (parsed.opener as JjguiConfig['opener'])
-      : DEFAULT_CONFIG.opener
-
-    const cmux = parsed.cmux || {}
-    const openMode = ['tab', 'split'].includes(cmux.openMode)
-      ? (cmux.openMode as CmuxConfig['openMode'])
-      : DEFAULT_CONFIG.cmux.openMode
-    const splitDirection = ['right', 'down'].includes(cmux.splitDirection)
-      ? (cmux.splitDirection as CmuxConfig['splitDirection'])
-      : DEFAULT_CONFIG.cmux.splitDirection
-
-    return { opener, cmux: { openMode, splitDirection } }
+    return parseConfig(content)
   } catch {
     // Use defaults when the config file does not exist.
     return { ...DEFAULT_CONFIG }
   }
+}
+
+export function parseConfig(content: string): JjguiConfig {
+  const parsed = parseSimpleToml(content)
+
+  const opener = ['auto', 'browser', 'cmux'].includes(parsed.opener)
+    ? (parsed.opener as JjguiConfig['opener'])
+    : DEFAULT_CONFIG.opener
+
+  const port = parsePort(parsed.port) ?? DEFAULT_CONFIG.port
+
+  const cmux = parsed.cmux || {}
+  const openMode = ['tab', 'split'].includes(cmux.openMode)
+    ? (cmux.openMode as CmuxConfig['openMode'])
+    : DEFAULT_CONFIG.cmux.openMode
+  const splitDirection = ['right', 'down'].includes(cmux.splitDirection)
+    ? (cmux.splitDirection as CmuxConfig['splitDirection'])
+    : DEFAULT_CONFIG.cmux.splitDirection
+
+  return { port, opener, cmux: { openMode, splitDirection } }
 }
 
 /**
@@ -109,4 +126,18 @@ export function resolveOpener(
 
   // 4. Default.
   return 'browser'
+}
+
+export function resolvePort(
+  cliFlag: string | undefined,
+  config: JjguiConfig,
+): number {
+  if (cliFlag !== undefined) {
+    const port = parsePort(cliFlag)
+    if (port !== undefined) return port
+    console.error(`Invalid port value: ${cliFlag}. Use a number from 1 to 65535.`)
+    process.exit(1)
+  }
+
+  return config.port
 }

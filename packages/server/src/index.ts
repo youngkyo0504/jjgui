@@ -3,10 +3,22 @@ import { notifyClients } from './routes'
 import { watch, type FSWatcher } from 'fs'
 import { writeFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
+import { DEFAULT_PORT } from './config'
 
-const PORT = 7777
+function resolveServerPort(): number {
+  const rawPort = process.env.JJGUI_PORT
+  if (!rawPort) return DEFAULT_PORT
+
+  const port = Number(rawPort)
+  if (Number.isInteger(port) && port >= 1 && port <= 65535) return port
+
+  console.error(`Invalid JJGUI_PORT value: ${rawPort}. Use a number from 1 to 65535.`)
+  process.exit(1)
+}
+
+const PORT = resolveServerPort()
 const DIST = join(import.meta.dir, '../../client/dist')
-const PID_FILE = '/tmp/jjgui.pid'
+const PID_FILE = `/tmp/jjgui-${PORT}.pid`
 
 // Manage file watchers by cwd.
 const watchers = new Map<string, FSWatcher>()
@@ -28,7 +40,7 @@ const server = Bun.serve({
 
     // health check
     if (url.pathname === '/health') {
-      return Response.json({ ok: true, pid: process.pid })
+      return Response.json({ ok: true, pid: process.pid, port: PORT })
     }
 
     // Handle API requests.
