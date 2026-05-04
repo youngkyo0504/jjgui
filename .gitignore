@@ -1,3 +1,4 @@
 node_modules/
 packages/client/dist/
 packages/jj-wrapper/target/
+.demo/
