@@ -10,13 +10,38 @@ This is an early preview. The first supported platform is macOS.
 
 ## Features
 
-- Visual commit graph for a local `jj` repository
-- Changed-file and commit-diff inspection
-- Edit, create, describe, rebase, split, squash, abandon, and move changes
-- Bookmark create, move, rename, delete, fetch, and push flows
-- Recent operation history with preview/revert support
+- Visual commit graph for a local `jj` repository, including working-copy, immutable, workspace, bookmark, remote bookmark, conflict, divergent, and empty-change badges
+- Expand commits to inspect changed files, discard files, move one file, or move a selected group of files to another commit
+- Commit diff and file diff inspection with syntax-aware, word-level inline diff rendering
+- Edit an existing commit, create a new commit on top, and update commit descriptions inline
+- Split commits by selecting files, squash commits into their parent, abandon a single commit, or abandon a whole subtree
+- Rebase a subtree from the context menu or by dragging a commit row onto a valid destination
+- Create, move, rename, and delete local bookmarks; show or hide remote bookmarks
+- Fetch all remotes, push a bookmark, or push a bookmark together with its descendants
+- Recent operation drawer with running/success/failure state, operation details, revert preview, and revert confirmation
+- Undo support for rebase, move/split/squash/abandon/discard operations, and fetch operations
 - Live refresh through local file watching and server-sent events
-- Browser or cmux browser opening
+- Browser or cmux browser opening, with configurable tab or split behavior
+
+## Demo Videos
+
+The demo clips live in [etc](etc) and are embedded here for the workflows that benefit most from motion.
+
+### Diff Inspection
+
+Open a commit, select a changed file, and review the rendered diff without leaving the graph.
+
+<video src="etc/diff.mp4" controls width="960"></video>
+
+[Open the diff demo video](etc/diff.mp4)
+
+### Drag-and-Drop Rebase
+
+Drag a commit row onto a valid destination to prepare a subtree rebase, then confirm it from the inline prompt.
+
+<video src="etc/rebase.mp4" controls width="960"></video>
+
+[Open the rebase demo video](etc/rebase.mp4)
 
 ## cmux-Friendly
 
