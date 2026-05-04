@@ -31,9 +31,7 @@ The demo clips live in [etc](etc) and are embedded here for the workflows that b
 
 Open a commit, select a changed file, and review the rendered diff without leaving the graph.
 
-<video src="etc/diff.mp4" controls width="960"></video>
-
-[Open the diff demo video](etc/diff.mp4)
+![video](etc/diff.mp4)
 
 ### Drag-and-Drop Rebase
 
