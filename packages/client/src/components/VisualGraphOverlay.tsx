@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react'
 import {
   buildVisualGraph,
   visualNodeRadius,
@@ -90,7 +90,7 @@ export default function VisualGraphOverlay({ rows, containerRef }: Props) {
     setMeasurements((current) => equalMeasurements(current, next) ? current : next)
   }, [containerRef, rows.length])
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
