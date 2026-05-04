@@ -31,15 +31,14 @@ The demo clips live in [etc](etc) and are embedded here for the workflows that b
 
 Open a commit, select a changed file, and review the rendered diff without leaving the graph.
 
-![video](etc/diff.mp4)
+https://github.com/user-attachments/assets/8ed8a731-6d01-4ee0-95dd-fa4acc87f8ab
 
 ### Drag-and-Drop Rebase
 
 Drag a commit row onto a valid destination to prepare a subtree rebase, then confirm it from the inline prompt.
 
-<video src="etc/rebase.mp4" controls width="960"></video>
+https://github.com/user-attachments/assets/49664bcb-9c10-483a-b08c-bbe5ffaaebf3
 
-[Open the rebase demo video](etc/rebase.mp4)
 
 ## cmux-Friendly
 
