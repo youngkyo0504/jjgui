@@ -4,6 +4,8 @@ A local web GUI for Jujutsu repositories.
 
 `jjgui` runs a small local Bun server, talks to the `jj` CLI, and opens a browser UI for the repository you are working in. It is meant for people who already like Jujutsu but sometimes want to see and manipulate the commit graph visually.
 
+It is especially nice with cmux workflows: launch `jjgui .` from a cmux session and keep the repository UI beside your shell in a cmux browser tab or split.
+
 This is an early preview. The first supported platform is macOS.
 
 ## Features
@@ -15,6 +17,28 @@ This is an early preview. The first supported platform is macOS.
 - Recent operation history with preview/revert support
 - Live refresh through local file watching and server-sent events
 - Browser or cmux browser opening
+
+## cmux-Friendly
+
+`jjgui` works well inside cmux. When launched from a cmux session, `opener = "auto"` detects `CMUX_SURFACE_ID` and opens the UI in a cmux browser tab.
+
+To force cmux:
+
+```bash
+jjgui . --opener=cmux
+```
+
+To open in a split instead of a tab:
+
+```toml
+opener = "cmux"
+
+[cmux]
+openMode = "split"
+splitDirection = "right"
+```
+
+`splitDirection` can be `right` or `down`.
 
 ## Requirements
 
@@ -107,28 +131,6 @@ You can also set the opener for one run:
 jjgui . --opener=browser
 jjgui . --opener=cmux
 ```
-
-## cmux
-
-`jjgui` works nicely inside cmux. When launched from a cmux session, `opener = "auto"` detects `CMUX_SURFACE_ID` and opens the UI in a cmux browser tab.
-
-To force cmux:
-
-```bash
-jjgui . --opener=cmux
-```
-
-To open in a split instead of a tab:
-
-```toml
-opener = "cmux"
-
-[cmux]
-openMode = "split"
-splitDirection = "right"
-```
-
-`splitDirection` can be `right` or `down`.
 
 ## Development
 
