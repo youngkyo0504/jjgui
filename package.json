@@ -10,6 +10,8 @@
   },
   "scripts": {
     "dev": "bun run --cwd packages/server dev",
+    "demo": "bun run scripts/create-demo-repo.ts --reset --open",
+    "demo:repo": "bun run scripts/create-demo-repo.ts",
     "build": "bun run --cwd packages/client build",
     "start": "bun run bin/jjgui.ts"
   },
