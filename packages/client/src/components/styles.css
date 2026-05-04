@@ -103,7 +103,6 @@ body.drag-interaction-active {
   font-family: var(--font-waldenburg);
   font-size: 32px;
   font-weight: 300;
-  line-height: 1.08;
   letter-spacing: -0.64px;
   overflow: hidden;
   text-overflow: ellipsis;
