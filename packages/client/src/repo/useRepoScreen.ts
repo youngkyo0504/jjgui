@@ -2,7 +2,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { BookmarkRef, CommitInfo } from '../types'
 import { formatRelativeTime } from '../utils/format'
 import { openCommitDiffRoute } from '../utils/commitDiffRoute'
-import { buildChildrenMap, getDescendants } from '../utils/graph'
+import { buildSubtreeAbandonDisabledSet } from '../utils/graph'
 import { createRepoApp } from './createRepoApp'
 import { createEventSourceRepoEvents } from './eventSourceRepoEvents'
 import { createHttpRepoApi } from './httpRepoApi'
@@ -473,10 +473,7 @@ function buildInlinePanel(
 function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowView[] {
   const moveSelectionDialog = getMoveChangesFileSelectDialog(snapshot.dialog)
   const dragInteraction = snapshot.dragInteraction
-  const childrenMap = buildChildrenMap(snapshot.rows)
-  const commitsByChangeId = new Map(snapshot.rows.flatMap((row) => (
-    row.type === 'commit' && row.commit ? [[row.commit.changeId, row.commit] as const] : []
-  )))
+  const subtreeAbandonDisabledSet = buildSubtreeAbandonDisabledSet(snapshot.rows)
 
   return snapshot.rows.map((row, index) => {
     const previousGraphChars = snapshot.rows[index - 1]?.graphChars
@@ -509,12 +506,7 @@ function buildLogRows(snapshot: RepoSnapshot, commands: RepoCommands): LogRowVie
     const isDragInvalidTarget = dragInteraction?.hoveredTargetChangeId === commit.changeId && dragInteraction.targetValidity === 'invalid'
     const isContextMenuLocked = isBusyInteraction || !!moveSelectionDialog || !!dragInteraction
     const isMoveChangesSource = snapshot.moveChanges.fromChangeId === commit.changeId
-    const subtreeIds = new Set([commit.changeId, ...getDescendants(commit.changeId, childrenMap)])
-    const subtreeCommits = [...subtreeIds].flatMap((changeId) => {
-      const subtreeCommit = commitsByChangeId.get(changeId)
-      return subtreeCommit ? [subtreeCommit] : []
-    })
-    const isSubtreeAbandonDisabled = subtreeCommits.some((item) => item.isWorkingCopy || item.isImmutable)
+    const isSubtreeAbandonDisabled = subtreeAbandonDisabledSet.has(commit.changeId)
     const rowMoveSelectionDialog = isMoveSelectionSource ? moveSelectionDialog : null
     const visibleBookmarks = snapshot.showRemoteBookmarks
       ? commit.bookmarks
