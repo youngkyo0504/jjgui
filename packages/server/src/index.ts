@@ -22,12 +22,18 @@ const PID_FILE = `/tmp/jjgui-${PORT}.pid`
 
 // Manage file watchers by cwd.
 const watchers = new Map<string, FSWatcher>()
+const watchDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 export function ensureWatcher(cwd: string) {
   if (watchers.has(cwd)) return
   const watcher = watch(cwd, { recursive: true }, (_event, filename) => {
     if (filename && !filename.includes('.jj')) {
-      notifyClients(cwd)
+      const existing = watchDebounceTimers.get(cwd)
+      if (existing) clearTimeout(existing)
+      watchDebounceTimers.set(cwd, setTimeout(() => {
+        watchDebounceTimers.delete(cwd)
+        notifyClients(cwd)
+      }, 150))
     }
   })
   watchers.set(cwd, watcher)
