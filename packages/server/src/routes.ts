@@ -50,12 +50,14 @@ function getCwd(url: URL): string | null {
 export async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url)
 
-  // GET /api/log?cwd=...
+  // GET /api/log?cwd=...&limit=...
   if (req.method === 'GET' && url.pathname === '/api/log') {
     const cwd = getCwd(url)
     if (!cwd) return Response.json({ error: 'cwd required' }, { status: 400 })
+    const limitRaw = url.searchParams.get('limit')
+    const limit = limitRaw ? Math.max(1, Math.min(5000, parseInt(limitRaw, 10) || 500)) : 500
     try {
-      return Response.json(await getGraphLog(cwd))
+      return Response.json(await getGraphLog(cwd, limit))
     } catch (e) {
       return Response.json({ error: String(e) }, { status: 500 })
     }

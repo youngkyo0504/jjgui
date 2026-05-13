@@ -387,8 +387,8 @@ export function computeGraphLaneColorRows(graphPrefixes: string[]): string[][] {
   return graphPrefixes.map((graphPrefix) => computeLaneColors(graphPrefix, state))
 }
 
-export async function getGraphLog(cwd: string): Promise<GraphRow[]> {
-  const result = await $`jj log --color never -T ${TEMPLATE}`.cwd(cwd).text()
+export async function getGraphLog(cwd: string, limit = 500): Promise<GraphRow[]> {
+  const result = await $`jj log --color never --limit ${String(limit)} -T ${TEMPLATE}`.cwd(cwd).text()
 
   const rows: GraphRow[] = []
   const lines = result.split('\n')
