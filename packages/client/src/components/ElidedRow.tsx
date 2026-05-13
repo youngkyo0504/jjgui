@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { memo } from 'react'
 import GraphSlot from './GraphSlot'
 
 interface Props {
@@ -8,11 +8,11 @@ interface Props {
   nextGraphChars?: string
 }
 
-export default function ElidedRow({ graphChars }: Props) {
+export default memo(function ElidedRow({ graphChars }: Props) {
   return (
     <div className="graph-row">
       <GraphSlot graphChars={graphChars} />
       <span className="elided-data">(elided revisions)</span>
     </div>
   )
-}
+})
